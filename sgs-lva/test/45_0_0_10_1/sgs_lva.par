@@ -1,0 +1,70 @@
+
+                  Parameters for sgs_lva
+                  *************************
+
+START OF PARAMETERS:
+nscore.prn         -file with data
+1 2 3 5            -columns for X,Y,Z,var,sec var
+-1.0e21   1.0e21      -trimming limits
+0                  -debugging level: 0,1,2,3
+sgs.dbg            -file for debugging output
+sgs.out            -file for output
+1                  -nreal
+40   126.493  3.252             -nx,xmn,xsiz
+40   54.057   4.3               -ny,ymn,ysiz
+40   11.611   3.832             -nz,zmn,zsiz
+32146              -random number seed
+lva_field_45_0_0_10_1.prn      -file containing the locally varying anisotropy grid
+1 2 3 4 5          -LVA columns for ang1, ang2, ang3, aniso ratio min/max, aniso ratio vert/max
+40   126.493  3.252             -nx,xmn,xsiz
+40   54.057   4.3               -ny,ymn,ysiz
+40   11.611   3.832             -nz,zmn,zsiz
+2                     -noffsets for graph (number of offsets described below, see NOTE2)
+2                     -use MDS? 2=L-ISOMAP 3=read dist from  grid_cpp.out  and use L-ISOMAP (see NOTE3)
+7 7 7                 -number of landmark points in x,y,z (evenly spaced grid nodes)
+-1                    -max number of dimensions to use (set -1 to use max, see NOTE4)
+2 12                  -min, max nodes for simulation
+600                   -maximum search radii (a 1D isotropic distance in q dimensions)
+-1                    -maximum number of dimensions to use in search (-1 uses all dimensions see NOTE5)
+0     0               -0=SK,1=OK, simple kriging mean
+1 0.15468             -# of nested structures, nugget effect (1D variogram)
+1 0.83 80.0           -it,cc,range (see NOTE6)
+1                     -use multi-thread Boost Dijkstra (0=no, 1=yes)
+
+
+
+NOTE1: The estimation grid and the LVA grid can be identical.
+       If the grids are different the LVA GRID is resampled to the ESTIMATION GRID.
+       The estimation grid affects how the multidimensional scaling occurs
+       therefore, if the estimation grid is different it needs to be accounted for
+       in the variogram calculation.
+
+NOTE2: This program calls on the Boost_dijkstra.exe program to calculate the shortest paths.
+       When calculating the shortest paths there is the option to connect nodes separated by more than one grid block.
+       This allows for more flexible paths.  Keeping offset=1 connects each node to the nearest 8 (in 2D) and only
+       allows paths with 0,45,90,135 degree increments.  Using more offsets is recommended as paths will be smoother and
+       shorter but this requires more memory and may be infeasible for large 3D models
+
+NOTE3: The Dijkstra program can be CPU intensive.  If the program is run once a file  grid_cpp.out  is
+       created with all the distances between nodes and landmark points required.  Subsequent runs of the
+       program can simply read in this file rather than call the Dijkstra algorithm again.
+       If the number of offsets, the grid or the configuration of landmark points are changed the Dijkstra program
+       MUST be run again to calculate the new UPDATED distances.
+
+NOTE4: Retaining fewer dimensions than the max will reduce memory requirements a bit and will speed up the program.
+       The most important dimensions are retained.
+
+NOTE5: Using fewer than the maximum dimensions can speed up the program.  The most important dimensions are retained.
+       This may reduce the memory requirements of the program (i.e. the kdtree) if using large grids and many landmark points.
+       Set to -1 unless CPU time is an issue.  The number of dimensions searched to determine the nearest data
+       can be different than the number of dimensions used in the calculation of the distance between locations.
+       Using fewer data in the search can speed up the program, but may result in some error when finding close data.
+
+NOTE6: Variogram must be positive definate in q dimensions.  The exponential variogram is recomended:
+       1-spherical variogram
+       2-exponenital variogram
+       3-gaussian variogram
+       4-power model
+       5-hole effect model
+
+
