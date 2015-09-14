@@ -6,5 +6,7 @@ to run shortest path distance calculation.
 
 
 make
+
 make install
+
 make test
