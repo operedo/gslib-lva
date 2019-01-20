@@ -3,8 +3,13 @@
 #FFLAGS= -g -traceback -m32 -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
 FFLAGS= -openmp -O3 -mtune=native -march=native 
+
+LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/ia32/libiomp5.a
+
 #FFLAGS=  -O3 -xSSE4.2
-FC=ifort
+#FC=ifort
+#FC=/Soft/intelf/composer_xe_2013.3.163/bin/intel64/ifort
+FC=/Soft/intelf/composer_xe_2013.3.163/bin/ia32/ifort
 #FC=gfortran
 #F90=quicksort.f90  glb.f90  grid_info.f90 class_laf.f90 graph_subs.f90 sqdist.f90 GAMV_LVA.f90 Scaling\ -\ ISOMAP_landmark.f90
 KIND_OBJS=  
@@ -138,11 +143,13 @@ ALL_OBJS=$(FOR_OBJS) $(F90_OBJS)
 OUT=SGS_LVA
 
 default: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OBJS)
-	$(FC) $(FFLAGS) $(KIND_OBJS) $(OBJS) $(ALL_OBJS) -o $(OUT)
-	cp $(OUT) ../bin
+	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OBJS) -o $(OUT)
+	mkdir ../bin
+	cp $(OUT) ../bin/
 	
 clean:
 	rm *.mod *.o $(OUT) ../bin/$(OUT)
+	rm -r ../bin/
 
 .SUFFIXES: .o .F90 .f90 .for .f
 
