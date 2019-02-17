@@ -1,0 +1,50 @@
+
+                  Parameters for GAMV
+                  *******************
+
+START OF PARAMETERS:
+drillholes.dat         -file with data
+1 2 3 4            -columns for X, Y, Z coordinates, VAR
+-1e21 1e21          -trimming limits
+gamv.out           -file for variogram output
+80                 -number of lags
+1                -lag separation distance
+0.5                 -lag tolerance
+lva_field.dat      -file containing the locally varying anisotropy grid
+1 2 3 4 5          -LVA columns for ang1, ang2, ang3, aniso ratio min/max, aniso ratio vert/max
+40   -1.0  0.05    -nx,xmn,xsiz
+40   -1.0  0.05    -ny,ymn,ysiz
+40   0.0  0.025    -nz,zmn,zsiz
+40   -1.0  0.05    -nx,xmn,xsiz
+40   -1.0  0.05    -ny,ymn,ysiz
+40   0.0  0.025    -nz,zmn,zsiz
+2                  -noffsets for graph (number of offsets described below, see NOTE2)
+3                  -use MDS? 2=L-ISOMAP 3=read dist from  grid_cpp.out  and use L-ISOMAP (see NOTE3)
+10 10 10            -number of landmark points in x,y,z (evenly spaced grid nodes) set to nx,ny,nz for classical MDS (landmark point on each cell)
+-1                 -max number of dimensions to use (set -1 to use max, see NOTE4)
+1                  -standardize sills? (0=no, 1=yes)
+1                  -print pair distance histogram (0=no, 1=yes)
+0                  -use multi-thread Boost Dijkstra (0=no, 1=yes)
+
+NOTE1: The estimation grid and the LVA grid can be identical.
+       If the grids are different the LVA GRID is resampled to the ESTIMATION GRID.
+       The estimation grid affects how the multidimensional scaling occurs
+       therefore, if the estimation grid is different it needs to be accounted for
+       in the variogram calculation.
+
+NOTE2: This program calls on the Boost_dijkstra.exe program to calculate the shortest paths.
+       When calculating the shortest paths there is the option to connect nodes separated by more than one grid block.
+       This allows for more flexible paths.  Keeping offset=1 connects each node to the nearest 8 (in 2D) and only
+       allows paths with 0,45,90,135 degree increments.  Using more offsets is recommended as paths will be smoother and
+       shorter but this requires more memory and may be infeasible for large 3D models
+
+NOTE3: The Dijkstra program can be CPU intensive.  If the program is run once a file  grid_cpp.out  is
+       created with all the distances between nodes and landmark points required.  Subsequent runs of the
+       kriging program can simply read in this file rather than call the Dijkstra algorithm again.
+       If the number of offsets, the grid or the configuration of landmark points are changed the Dijkstra program
+       MUST be run again to calculate the new UPDATED distances.
+
+NOTE4: Using fewer than the maximum dimensions can speed up the program.  The most important dimensions are retained.
+       This does not reduce the memory requirements of the program, it only decreases run time.
+       Set to -1 unless CPU time is an issue.
+
