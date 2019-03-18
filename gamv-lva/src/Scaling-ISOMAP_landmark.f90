@@ -34,27 +34,27 @@ subroutine get_landmark_pts(ndmax,nd)
                   stop
             end if
            
-          !xyzland=int(real(xyzland)*(6.0/12.0))
-          print *,'NODES*xyzland=',(NODES*xyzland)
+       !   !xyzland=int(real(xyzland)*(6.0/12.0))
+       !   print *,'NODES*xyzland=',(NODES*xyzland)
 
-          !if(NODE*xyzland.lt.2**26)then 
-          allocate(coord_ISOMAP(NODES,xyzland),stat = test111) 
+       !   !if(NODE*xyzland.lt.2**26)then 
+       !   allocate(coord_ISOMAP(NODES,xyzland),stat = test111) 
 
-        print *,'size(coord_ISOMAP)=',size(coord_ISOMAP)
-        !do i=1,NODES
-        !do j=1,xyzland
-        !   coord_ISOMAP(i,j)=i+j;
-        !end do
-        !end do
-        !call sleep(10)
+       ! print *,'size(coord_ISOMAP)=',size(coord_ISOMAP)
+       ! !do i=1,NODES
+       ! !do j=1,xyzland
+       ! !   coord_ISOMAP(i,j)=i+j;
+       ! !end do
+       ! !end do
+       ! !call sleep(10)
 
 
-        if(test111.ne.0)then
-              write(*,*)'ERROR: Allocation of coord_ISOMAP failed due to', &
-                    ' insufficient memory.'
-              stop
-        end if
-        deallocate(coord_ISOMAP)
+       ! if(test111.ne.0)then
+       !       write(*,*)'ERROR: Allocation of coord_ISOMAP failed due to', &
+       !             ' insufficient memory.'
+       !       stop
+       ! end if
+       ! deallocate(coord_ISOMAP)
 
         !else
         !   write(*,*)'Using out-of-core computations (overflow in memory usage)'
@@ -112,10 +112,10 @@ subroutine get_landmark_pts(ndmax,nd)
     if(MDS_opt==2) then
        if(idijkstra==1)then
           write(*,*)'Starting multi-thread Boost Dijkstra...'
-          sys_call_out = systemqq('rm dist_cpp.out* && Boost_dijkstra_openmp && cat dist_cpp.out_* > dist_cpp.out') !calculate the distances to the landmark points
+          sys_call_out = systemqq('rm dist_cpp.out* && ./Boost_dijkstra_openmp && cat dist_cpp.out_* > dist_cpp.out') !calculate the distances to the landmark points
        else
           write(*,*)'Starting single-thread Boost Dijkstra...'
-          sys_call_out = systemqq('Boost_dijkstra') !calculate the distances to the landmark points
+          sys_call_out = systemqq('./Boost_dijkstra') !calculate the distances to the landmark points
        endif
     end if
     

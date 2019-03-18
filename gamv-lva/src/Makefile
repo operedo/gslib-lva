@@ -1,11 +1,13 @@
-FC=/Soft/intelf/composer_xe_2013.3.163/bin/ia32/ifort
+#FC=/Soft/intelf/composer_xe_2013.3.163/bin/ia32/ifort
+FC=/Soft/intelf/composer_xe_2013.3.163/bin/intel64/ifort
 #FC=gfortran
 #FFLAGS= -freal-8-real-4 -O3
 #FFLAGS= -g -traceback -m32 -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
-FFLAGS= -openmp -O3 -mtune=native -march=native 
+FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
 #FFLAGS=  -O3 -xSSE4.2
-LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/ia32/libiomp5.a
+#LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/ia32/libiomp5.a
+LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a
 #FC=ifort
 #FC=gfortran
 #F90=quicksort.f90  glb.f90  grid_info.f90 class_laf.f90 graph_subs.f90 sqdist.f90 GAMV_LVA.f90 Scaling\ -\ ISOMAP_landmark.f90

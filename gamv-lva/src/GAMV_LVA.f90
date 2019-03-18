@@ -875,20 +875,33 @@ end if !loop over regrid
             tv(i)  = 0.0
       end do
       dismxs = ((real(nlag) + 0.5 - EPSLON) * xlag) ** 2
-      
-      !set up optimization:
-    
+
+!     
+! Build and save the graph in file grid.out:
+!
+      call timestamp()
       call set_graph() 
+      call timestamp()
       
- 
-!this routine will fix the distances according to landmark (ISOMAP) multi dim scaling
+! 
+! This routine uses the c++ program to get distances between grid nodes 
+! and landmark poitns
+!
       print *,nx,ny,nz
-      call get_landmark_pts(ndmax,nd,nx,ny,nz) !use c++ program to get distances to landmark poitns
-      !now have coord of all grid points in coord_ISOMAP(NODES,dim)
+      call timestamp()
+      call get_landmark_pts(ndmax,nd,nx,ny,nz) 
+      call timestamp()
+
+!
+! Now we have coord of all grid points in coord_ISOMAP(NODES,dim)
+!
+      call timestamp()
       call MDS_ISOMAP(ndmax,nd) !do the multidimensinoal scaling
+      call timestamp()
 
 
 
+      call timestamp()
 !
 ! MAIN LOOP OVER ALL PAIRS:
       irepo = max(1,min((nd/10),1000))
@@ -1177,6 +1190,7 @@ end if !loop over regrid
  5          continue
  4    continue
  3    continue
+      call timestamp()
 !
 ! Get average values for gam, hm, tm, hv, and tv, then compute
 ! the correct "variogram" measure:
@@ -1509,3 +1523,82 @@ subroutine makepar
 
     close(lun)
 end subroutine makepar
+
+subroutine timestamp ( )
+
+!*****************************************************************************80
+!
+!! TIMESTAMP prints the current YMDHMS date as a time stamp.
+!
+!  Example:
+!
+!    31 May 2001   9:45:54.872 AM
+!
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license.
+!
+!  Modified:
+!
+!    18 May 2013
+!
+!  Author:
+!
+!    John Burkardt
+!
+!  Parameters:
+!
+!    None
+!
+  implicit none
+
+  character ( len = 8 ) ampm
+  integer ( kind = 4 ) d
+  integer ( kind = 4 ) h
+  integer ( kind = 4 ) m
+  integer ( kind = 4 ) mm
+  character ( len = 9 ), parameter, dimension(12) :: month = (/ &
+    'January  ', 'February ', 'March    ', 'April    ', &
+    'May      ', 'June     ', 'July     ', 'August   ', &
+    'September', 'October  ', 'November ', 'December ' /)
+  integer ( kind = 4 ) n
+  integer ( kind = 4 ) s
+  integer ( kind = 4 ) values(8)
+  integer ( kind = 4 ) y
+
+  call date_and_time ( values = values )
+
+  y = values(1)
+  m = values(2)
+  d = values(3)
+  h = values(5)
+  n = values(6)
+  s = values(7)
+  mm = values(8)
+
+  if ( h < 12 ) then
+    ampm = 'AM'
+  else if ( h == 12 ) then
+    if ( n == 0 .and. s == 0 ) then
+      ampm = 'Noon'
+    else
+      ampm = 'PM'
+    end if
+  else
+    h = h - 12
+    if ( h < 12 ) then
+      ampm = 'PM'
+    else if ( h == 12 ) then
+      if ( n == 0 .and. s == 0 ) then
+        ampm = 'Midnight'
+      else
+        ampm = 'AM'
+      end if
+    end if
+  end if
+
+  write ( *, '(i2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3,1x,a)' ) &
+    d, trim ( month(m) ), y, h, ':', n, ':', s, '.', mm, trim ( ampm )
+
+  return
+end

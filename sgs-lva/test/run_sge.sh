@@ -11,7 +11,8 @@
 
 
 
-source /Soft/intelf/composer_xe_2013.3.163/bin/compilervars.sh ia32
+#source /Soft/intelf/composer_xe_2013.3.163/bin/compilervars.sh ia32
+source /Soft/intelf/composer_xe_2013.3.163/bin/compilervars.sh intel64
 
 #TEST=45_0_0_10_1 
 TEST=swiss-roll
@@ -23,7 +24,10 @@ cd $TEST
 #cp -R /homeA/o/operedo/gslib-lva/sgs-lva/test/$TEST/ /scratch/nas/4/operedo/
 
 #cd /scratch/nas/4/operedo/$TEST
-./SGS_LVA sgs_lva.par > output.txt 2> error.txt
+#./SGS_LVA sgs_lva.par > output.txt 2> error.txt
+#./GAMV_LVA_intel64 gamv.par_v6_360_10_1 > out_v6_360_10_1 2>&1
+/usr/bin/time ./GAMV_LVA_intel64 gamv.par_v6_360_10_1 > out_v6_360_10_1_10x10x10_2off 2>&1
+
 #RES="`perl absDiff.pl sgs.out sgs.out_ok | wc -l`"
 #if [ $RES -eq 0 ]; then
 #	echo "[sgs-lva] $TEST: PASSED"
