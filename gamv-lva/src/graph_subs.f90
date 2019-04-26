@@ -57,9 +57,9 @@ subroutine set_graph()
     real(kind=dp), dimension ( 3 ) :: v  !copy of ba
     integer, allocatable, dimension (:,:,:) :: redund_temp !is the offset redundant
 
-   !make some temprary files
-        ldbg2=987
-        open(ldbg2,file='grid.out',status='unknown')
+    !make some temprary files
+    ldbg2=987
+    open(ldbg2,file='grid.out',status='unknown')
     
     nx2=nx*refine;ny2=ny*refine;nz2=nz*refine
     xsiz2=xsiz/refine; ysiz2=ysiz/refine; zsiz2=zsiz/refine
@@ -67,8 +67,8 @@ subroutine set_graph()
     allocate(redund_temp(-graph_offset:graph_offset,-graph_offset:graph_offset,-graph_offset:graph_offset))
     n_close_data=0
     
-add_paths_land=0   
-add_paths_data=0 
+    add_paths_land=0   
+    add_paths_data=0 
 
     LANDNODES=0
     DATANODES=0
@@ -147,29 +147,30 @@ add_paths_data=0
         end do
     end if !if using the template to cal distances
     
-!now need a template if the offset is is more than one
-!some of the links in the offset>1 are redundant
-!will make the overall graph smaller if we ignore these links
-redund_temp=0
-do k=-1*kkk,1*kkk
-do j=-1*kkk,1*kkk
-do i=-1*kkk,1*kkk
-    !is this offset redundant with one of the first offsets?
-    do ind=2,graph_offset
-    !check all original offsets
-    do kk=-1,1
-    do jj=-1,1
-    do ii=-1,1
-        if (ii*ind ==i .and. jj*ind ==j .and. kk*ind==k) redund_temp(i,j,k)=1
+    !now need a template if the offset is is more than one
+    !some of the links in the offset>1 are redundant
+    !will make the overall graph smaller if we ignore these links
+    redund_temp=0
+    do k=-1*kkk,1*kkk
+    do j=-1*kkk,1*kkk
+    do i=-1*kkk,1*kkk
+        !is this offset redundant with one of the first offsets?
+        do ind=2,graph_offset
+        !check all original offsets
+        do kk=-1,1
+        do jj=-1,1
+        do ii=-1,1
+            if (ii*ind ==i .and. jj*ind ==j .and. kk*ind==k) redund_temp(i,j,k)=1
+        end do
+        end do
+        end do
+        
+        end do
     end do
     end do
     end do
-    
-    end do
-end do
-end do
-end do
-redund_temp(0,0,0)=1
+    redund_temp(0,0,0)=1
+
     !count number of edges we need
     do k=1,nz2
     do j=1,ny2
@@ -197,10 +198,10 @@ redund_temp(0,0,0)=1
     write(ldbg2,'(I10,I10)') NODES,EDGES+LANDNODES+DATANODES !/2 !THIS FILE NEEDS NUMBER OF EDGES AND NODES
     
     allocate(KF(nx2*ny2*nz2+1+ndata),stat = test11)
-        if(test11.ne.0)then
-              write(*,'(a,I10,a)') 'ERROR: Allocation failed your graph is too large and requires ',EDGES,' edges'
-              stop
-        end if
+    if(test11.ne.0)then
+        write(*,'(a,I10,a)') 'ERROR: Allocation failed your graph is too large and requires ',EDGES,' edges'
+        stop
+    end if
     
     KF=0
     cur_node=0
@@ -221,27 +222,27 @@ redund_temp(0,0,0)=1
             !are we inside the model still
             ix=i+ii; iy=j+jj; iz=k+kk
             if(ix>0 .and. ix<=nx2 .and.   iy>0 .and. iy<=ny2 .and.   iz>0 .and. iz<=nz2 .and. redund_temp(ii,jj,kk)==0) then  !we are in the model
-                    CUR_EDGE=CUR_EDGE+1
-                    p2(1) = xmn2 + real(ix-1)*xsiz2
-                    p2(2) = ymn2 + real(iy-1)*ysiz2
-                    p2(3) = zmn2 + real(iz-1)*zsiz2
-                    edge_NODE=get_node(ix,iy,iz,nx2,ny2,nz2)
-                    KF(cur_node+1)=CUR_EDGE                   
-                    if(use_template==1) then
-                        Pmin(1)=i ; Pmin(2)=j ; Pmin(3)=k ; Pmax=Pmin
-                        if(Pmin(1)>ix) Pmin(1)=ix
-                        if(Pmin(2)>iy) Pmin(2)=iy
-                        if(Pmin(3)>iz) Pmin(3)=iz
-                        if(Pmax(1)<ix) Pmax(1)=ix
-                        if(Pmax(2)<iy) Pmax(2)=iy
-                        if(Pmax(3)<iz) Pmax(3)=iz
-                        cnt=sum(Pmax-Pmin)
-                        edge_dist= andist(p1,p2,Pmin,Pmax,int(cnt+3),xsiz2,ysiz2,zsiz2,ymn2,zmn2,xmn2,ii,jj,kk)
-                    else
-                        edge_dist=adist(p1,p2,junk)
-                    end if
- !                   to write out the graph:
-                     write(ldbg2,'(I8,xx,I8,xx,g15.9)' ) cur_node,edge_NODE,edge_dist
+                CUR_EDGE=CUR_EDGE+1
+                p2(1) = xmn2 + real(ix-1)*xsiz2
+                p2(2) = ymn2 + real(iy-1)*ysiz2
+                p2(3) = zmn2 + real(iz-1)*zsiz2
+                edge_NODE=get_node(ix,iy,iz,nx2,ny2,nz2)
+                KF(cur_node+1)=CUR_EDGE                   
+                if(use_template==1) then
+                    Pmin(1)=i ; Pmin(2)=j ; Pmin(3)=k ; Pmax=Pmin
+                    if(Pmin(1)>ix) Pmin(1)=ix
+                    if(Pmin(2)>iy) Pmin(2)=iy
+                    if(Pmin(3)>iz) Pmin(3)=iz
+                    if(Pmax(1)<ix) Pmax(1)=ix
+                    if(Pmax(2)<iy) Pmax(2)=iy
+                    if(Pmax(3)<iz) Pmax(3)=iz
+                    cnt=sum(Pmax-Pmin)
+                    edge_dist= andist(p1,p2,Pmin,Pmax,int(cnt+3),xsiz2,ysiz2,zsiz2,ymn2,zmn2,xmn2,ii,jj,kk)
+                else
+                    edge_dist=adist(p1,p2,junk)
+                end if
+                ! to write out the graph:
+                write(ldbg2,'(I8,xx,I8,xx,g15.9)' ) cur_node,edge_NODE,edge_dist
             end if !check if we are in the model still
         end do
         end do
@@ -252,24 +253,21 @@ redund_temp(0,0,0)=1
 
 
     write(*,*) ; write(*,*)  ; write(*,*) 
-    write(*,'(a,I10,a,I10,a)') 'DONE calcualting the distances between ',NODES, ' nodes, with ', EDGES,' edges'
+    write(*,'(a,I10,a,I10,a)') 'DONE calculating the distances between ',NODES, ' nodes, with ', EDGES,' edges'
     write(*,*) ; write(*,*)  ; write(*,*) 
     
     max_seg=old_max_seg !reset the max segment to the user defined value
     close(ldbg2)
 
-if(use_template==1) then
-    !dont need these anymore
-    deallocate(template_D)
-    deallocate(KF)
-    if(allocated(redund_temp)) deallocate(redund_temp)
-    if(allocated(norm_D)) deallocate(norm_D)
-    if(allocated(template_D)) deallocate(template_D)
-end if
+    if(use_template==1) then
+        !dont need these anymore
+        deallocate(template_D)
+        deallocate(KF)
+        if(allocated(redund_temp)) deallocate(redund_temp)
+        if(allocated(norm_D)) deallocate(norm_D)
+        if(allocated(template_D)) deallocate(template_D)
+    end if
 
-
-
-    
 end subroutine set_graph
 
 
@@ -277,7 +275,7 @@ end subroutine set_graph
 
 integer function get_node(i,j,k,nx2,ny2,nz2)
 !gets the node index given the model location and the model parameters
-integer i,j,k,nx2,ny2,nz2,lpsout
+    integer i,j,k,nx2,ny2,nz2,lpsout
     get_node=i+(j-1)*nx2 + (k-1)*nx2*ny2
 end function get_node
 
@@ -319,11 +317,6 @@ real(kind=dp) function andist(a,b,Pmin,Pmax,inter,xsiz2,ysiz2,zsiz2,ymn2,zmn2,xm
     integer cnt,i,j,k
     real(kind=dp) line(3),Tline(inter+2),locc,xsiz2,ysiz2,zsiz2,ymn2,zmn2,xmn2,d,length,p(3)
     logical outside
-
-
-    
-    
-    
     
     !get eqn of the line from point a to be (starting at b?
     line=(b-a)
@@ -381,15 +374,7 @@ real(kind=dp) function andist(a,b,Pmin,Pmax,inter,xsiz2,ysiz2,zsiz2,ymn2,zmn2,xm
             !get the aniso dist of this segment from the template lookup
             andist=andist+template_D(ii,jj,kk,ind(1),ind(2),ind(3) ) * length !*norm_D(ii,jj,kk) !length is the % of the line, template has the actual line distance
         end if
-        
-        
-    
     end do
-    
-    
-    
-    
-    
 end function andist
 !-------------------------------------------------------------------
 !-------------------------------------------------------------------

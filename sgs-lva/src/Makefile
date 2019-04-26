@@ -2,7 +2,8 @@
 #FFLAGS= -freal-8-real-4 -O3
 #FFLAGS= -g -traceback -m32 -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
-FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
+#FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
+FFLAGS= -openmp -O3 -mtune=native -march=native 
 
 #LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/ia32/libiomp5.a
 LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a
