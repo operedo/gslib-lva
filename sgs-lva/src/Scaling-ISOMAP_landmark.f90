@@ -40,6 +40,7 @@ subroutine get_landmark_pts(ndmax,nd,nx,ny,nz)
 
     !read in the distances from the file:
 
+    start_time=secnds(0.0)
     open(nodesfl,file='dist_cpp.out',status='unknown')
     
     allocate(coord_ISOMAP(NODES,xyzland),stat = test)
@@ -49,15 +50,13 @@ subroutine get_landmark_pts(ndmax,nd,nx,ny,nz)
           stop
     end if
 
-
-
-
     do j=1,xyzland
         read(nodesfl,*) coord_ISOMAP(1:NODES,j)
     end do
     
-    
     close(nodesfl)
+    sum_time = secnds(start_time)
+Write(*,*) 'reading dist_cpp.out into coord_ISOMAP',sum_time
     
     
 end subroutine get_landmark_pts
@@ -75,6 +74,11 @@ subroutine MDS_ISOMAP(ndmax,nd,nx,ny,nz)
     real*8, allocatable, dimension (:,:) :: A1,B1
     integer test,cnt
 
+! variables for dgemm mkl
+    real*8, allocatable, dimension (:,:) :: coord_ISOMAP_out
+    integer M,N,K
+    real*8 ALPHA,BETA
+
     open(3676,file='grid_dists.out',status="unknown")
      
 
@@ -91,22 +95,39 @@ subroutine MDS_ISOMAP(ndmax,nd,nx,ny,nz)
         temp_coord=coord_ISOMAP
     end if    
     
+    start_time=secnds(0.0)
     coord_ISOMAP=coord_ISOMAP**2
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating coord_ISOMAP**2',sum_time
     
+    start_time=secnds(0.0)
     do i=1,NODES
       A1(i,1)=sum(coord_ISOMAP(i,:))/xyzland
     end do
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating A1(:,1)',sum_time
 
+    start_time=secnds(0.0)
     do i=1,xyzland
       B1(1,i)=sum(coord_ISOMAP(:,i))/NODES
     end do
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating B1(:,1)',sum_time
 
+    start_time=secnds(0.0)
     D1=sum(coord_ISOMAP)/(NODES*xyzland)
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating D1',sum_time
+    
+    start_time=secnds(0.0)
     do j=1,NODES
     do i=1,xyzland
         coord_ISOMAP(j,i)= coord_ISOMAP(j,i) - A1(j,1) - B1(1,i) + D1
     end do
     end do
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating updated coord_ISOMAP',sum_time
+    
     coord_ISOMAP=-0.5*coord_ISOMAP
 
     !subB=-0.5*(transpose(d2lanmark) - A1 - B1 + D1 )
@@ -115,14 +136,30 @@ subroutine MDS_ISOMAP(ndmax,nd,nx,ny,nz)
     allocate(subB2(xyzland,xyzland))
       
     start_time=secnds(0.0)
-    subB2=matmul(transpose(coord_ISOMAP),coord_ISOMAP)
-    sum_time = secnds(start_time)
+    !subB2=matmul(transpose(coord_ISOMAP),coord_ISOMAP)
 
-Write(*,*) 'calculating the eigenvalues and vectors'
+M=xyzland
+K=NODES
+N=xyzland
+ALPHA=1.0
+BETA=0.0
+CALL DGEMM('T','N',M,N,K,ALPHA,coord_ISOMAP,M,coord_ISOMAP,K,BETA,subB2,M)
+
+
+
+
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating subB2',sum_time
+
     start_time=secnds(0.0)
     call eig ( subB2, evalues, vectors, ubound(subB2,1) )
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating the eigenvalues and vectors',sum_time
     write(T_eigs,'(3I12,f19.5)')  NODES, edges, ubound(subB2,1), secnds(start_time)
-Write(*,*) 'calculating the coord of all grid points'
+
+!Write(*,*) 'calculating the coord of all grid points'
+    
+    start_time=secnds(0.0)
     
     !need to reverse array order
     !use prexisting arrays as temp arrays
@@ -151,24 +188,38 @@ Write(*,*) 'calculating the coord of all grid points'
     if(dim==0 .or. dim==-1) dim=xyzland-1 !discard the smallest if there are none neg, as per ISOMAP (see their paper)
     write(*,*) 'number of dimensions to acutally use:', int(dim)
 
-      allocate(val(xyzland,xyzland))
+    allocate(val(xyzland,xyzland))
      
-start_time=secnds(0.0)    
+    !start_time=secnds(0.0)    
 
 
 !!this replaces the ellements in a1 with a1*a2, essentially the matrix mult "matmul(coord_ISOMAP,vectors(:,1:dim))" but with less memory
 
-!$omp parallel default(shared) private(i,j,vec_temp)
-!$omp do schedule(static)
-do i=1,NODES
-do j=1,dim   
-    vec_temp(j) = sum(  coord_ISOMAP(i,:)*vectors(:,j)  )
-end do
-!now dont need the row in a1
-coord_ISOMAP(i,1:dim) = vec_temp
-end do
-!$omp end do nowait
-!$omp end parallel
+!!$omp parallel default(shared) private(i,j,vec_temp)
+!!$omp do schedule(static)
+!do i=1,NODES
+!do j=1,dim  
+!    vec_temp(j) = sum(  coord_ISOMAP(i,:)*vectors(:,j)  )
+!end do
+!!now dont need the row in a1
+!coord_ISOMAP(i,1:dim) = vec_temp
+!end do
+!!$omp end do nowait
+!!$omp end parallel
+!!dgemm/sgemm -> blas
+
+M=NODES
+K=xyzland
+N=dim
+ALPHA=1.0
+BETA=0.0
+allocate(coord_ISOMAP_out(M,N))
+CALL DGEMM('N','N',M,N,K,ALPHA,coord_ISOMAP,M,vectors,K,BETA,coord_ISOMAP_out,M)
+coord_ISOMAP(:,1:dim) = coord_ISOMAP_out
+deallocate(coord_ISOMAP_out)
+
+write(*,*) coord_ISOMAP(:,1)
+
 
 if(allocated(vectors)) deallocate(vectors)
       
@@ -209,6 +260,11 @@ if(allocated(vectors)) deallocate(vectors)
     
     if(allocated(subB2)) deallocate(subB2)
     if(allocated(A1)) deallocate(A1)
+
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating the coord of all grid points',sum_time
+
+
     if(cal_stress==0) return    !return if you do not want to compare original distances with isomap distances
 
 
