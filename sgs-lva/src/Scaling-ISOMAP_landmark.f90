@@ -143,7 +143,7 @@ K=NODES
 N=xyzland
 ALPHA=1.0
 BETA=0.0
-CALL DGEMM('T','N',M,N,K,ALPHA,coord_ISOMAP,M,coord_ISOMAP,K,BETA,subB2,M)
+CALL DGEMM('T','N',M,N,K,ALPHA,coord_ISOMAP,K,coord_ISOMAP,K,BETA,subB2,M)
 
 
 
