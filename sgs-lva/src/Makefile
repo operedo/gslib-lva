@@ -4,9 +4,12 @@
 #FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
 FFLAGS= -mkl -openmp -O3 -mtune=native -march=native 
+CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
 
+LDFLAGS = -lstdc++ -lgomp
 #LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/ia32/libiomp5.a
-LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a
+#LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a
+LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a $(LDFLAGS)
 
 #FFLAGS=  -O3 -xSSE4.2
 #FC=ifort
@@ -14,6 +17,8 @@ FC=/Soft/intelf/composer_xe_2013.3.163/bin/intel64/ifort
 #FC=/Soft/intelf/composer_xe_2013.3.163/bin/ia32/ifort
 #FC=gfortran
 #F90=quicksort.f90  glb.f90  grid_info.f90 class_laf.f90 graph_subs.f90 sqdist.f90 GAMV_LVA.f90 Scaling\ -\ ISOMAP_landmark.f90
+CXX = g++
+
 KIND_OBJS=  
 F90_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva.o Scaling-ISOMAP_landmark.o
 #FOR=chknam.for  getindx.for
@@ -142,9 +147,13 @@ OBJS=   eig.o solve.o
 ##	slaswp.o \
 ##	strti2.o \
 ##	strtri.o 
- 
-ALL_OBJS=$(FOR_OBJS) $(F90_OBJS)
+
+CPP_OBJS= boostdijkstra.o boostdijkstra_capi.o Boostdijkstra.o
+
+ALL_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_OBJS)
 OUT=SGS_LVA
+
+#Scaling-ISOMAP_landmark.o : boostdijkstra_mod.o
 
 default: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OBJS) -o $(OUT)
@@ -153,7 +162,7 @@ default: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OBJS)
 clean:
 	rm *.mod *.o $(OUT) ../bin/$(OUT)
 
-.SUFFIXES: .o .F90 .f90 .for .f
+.SUFFIXES: .o .F90 .f90 .for .f .cpp
 
 .F90.o : ; $(FC) -c $(FFLAGS) $*.F90
 
@@ -162,4 +171,7 @@ clean:
 .for.o : ; $(FC) -c $(FFLAGS) $*.for
 
 .f.o : ; $(FC) -c $(FFLAGS) $*.f
+
+.cpp.o : ; ${CXX} -c ${CCFLAGS} $*.cpp
+
 

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source /Soft/intelf/composer_xe_2013.3.163/bin/compilervars.sh ia32
+source /Soft/intelf/composer_xe_2013.3.163/bin/compilervars.sh intel64
+source /Soft/intelcc/11.1-0.72/bin/iccvars.sh intel64
 
 #TEST=45_0_0_10_1 
 TEST=swiss-roll

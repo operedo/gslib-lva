@@ -27,6 +27,7 @@ subroutine get_landmark_pts(ndmax,nd,nx,ny,nz)
     write(nodesfl,'(I10)') (landpts)
     close(nodesfl)
     
+    start_time=secnds(0.0)
     if(MDS_opt==2) then
        if(idijkstra==1)then
           write(*,*)'Starting multi-thread Boost Dijkstra...'
@@ -36,6 +37,8 @@ subroutine get_landmark_pts(ndmax,nd,nx,ny,nz)
           sys_call_out = systemqq('./Boost_dijkstra') !calculate the distances to the landmark points
        endif
     end if
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating Dijkstra with Boost library',sum_time
  
 
     !read in the distances from the file:
@@ -61,7 +64,83 @@ Write(*,*) 'reading dist_cpp.out into coord_ISOMAP',sum_time
     
 end subroutine get_landmark_pts
 
+subroutine get_landmark_pts_onlymem(ndmax,nd,nx,ny,nz,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array)
+      use        geostat
+      use        global !to get some global variables
+      use        graph     !for using graph theory representation
+      use        graph_vars
+      !use        dfport
+      use        ifport
+      use        boostdijkstra
 
+    integer test,cnt,nodesfl,sys_call_out,j,ndmax,nx,ny,nz
+    real*4 LWORK(2)
+
+    integer, intent(in) :: NODES_LENGTH
+    integer, intent(in) :: GRID_OUT_LENGTH
+    integer, intent(in) :: cur_edge_node_array1(GRID_OUT_LENGTH)
+    integer, intent(in) :: cur_edge_node_array2(GRID_OUT_LENGTH)
+    real*8, intent(in) :: edge_dist_array(GRID_OUT_LENGTH)
+     
+
+    nodesfl=9698
+    
+
+
+    write(*,*) 
+    write(*,*) 
+    write(*,*) '**********************************************************'
+    write(*,*) '*Cal. grid to landmark pnts for ISOMAP multidimen scaling*'
+    write(*,*) '**********************************************************'
+    write(*,*) 
+   
+
+write(*,*) size(cur_edge_node_array1(:)),size(cur_edge_node_array2(:)),size(edge_dist_array(:)) 
+call dijkstra(NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array)
+stop
+
+    !write out the nodes to calculate distances for
+    open(nodesfl,file='nodes2cal.out',status='unknown')
+    write(nodesfl,*) xyzland
+    write(nodesfl,'(I10)') (landpts)
+    close(nodesfl)
+    
+    start_time=secnds(0.0)
+    if(MDS_opt==2) then
+       if(idijkstra==1)then
+          write(*,*)'Starting multi-thread Boost Dijkstra...'
+          sys_call_out = systemqq('rm dist_cpp.out* && ./Boost_dijkstra_openmp && cat dist_cpp.out_* > dist_cpp.out') !calculate the distances to the landmark points
+       else
+          write(*,*)'Starting single-thread Boost Dijkstra...'
+          sys_call_out = systemqq('./Boost_dijkstra') !calculate the distances to the landmark points
+       endif
+    end if
+    sum_time = secnds(start_time)
+Write(*,*) 'calculating Dijkstra with Boost library',sum_time
+ 
+
+    !read in the distances from the file:
+
+    start_time=secnds(0.0)
+    open(nodesfl,file='dist_cpp.out',status='unknown')
+    
+    allocate(coord_ISOMAP(NODES,xyzland),stat = test)
+    if(test.ne.0)then
+          write(*,*)'ERROR: Allocation of coord_ISOMAP failed due to', &
+                ' insufficient memory.'
+          stop
+    end if
+
+    do j=1,xyzland
+        read(nodesfl,*) coord_ISOMAP(1:NODES,j)
+    end do
+    
+    close(nodesfl)
+    sum_time = secnds(start_time)
+Write(*,*) 'reading dist_cpp.out into coord_ISOMAP',sum_time
+    
+    
+end subroutine get_landmark_pts_onlymem
 
 
 subroutine MDS_ISOMAP(ndmax,nd,nx,ny,nz)    

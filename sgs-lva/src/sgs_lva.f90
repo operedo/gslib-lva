@@ -997,7 +997,17 @@ koption=0
     real*4, allocatable :: sim(:,:)
     real*8, allocatable :: temp_order(:,:)
     integer, allocatable :: order(:)
-    
+  
+
+    integer :: NODES_LENGTH 
+    integer :: GRID_OUT_LENGTH 
+    integer, allocatable :: cur_edge_node_array1(:)
+    integer, allocatable :: cur_edge_node_array2(:)
+    real*8, allocatable :: edge_dist_array(:)
+
+
+
+ 
     allocate(results(ndmax))
 
 
@@ -1061,7 +1071,8 @@ koption=0
     end do
 
   !*************************************************************************************
-  call set_graph(MDS_opt) !set up the graph for the input grid, calculates edge lengths
+  !call set_graph(MDS_opt) !set up the graph for the input grid, calculates edge lengths
+  call set_graph_onlymem(MDS_opt,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array) !set up the graph for the input grid, calculates edge lengths
   !*************************************************************************************
   
 
@@ -1128,7 +1139,9 @@ koption=0
 
 if(MDS_opt==2 .or. MDS_opt==3) then
 !this routine will fix the distances according to landmark (ISOMAP) multi dim scaling
-    call get_landmark_pts(ndmax,nd,nx,ny,nz) !use c++ program to get distances to landmark poitns
+    !call get_landmark_pts(ndmax,nd,nx,ny,nz) !use c++ program to get distances to landmark poitns
+    write(*,*) NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1(1),cur_edge_node_array2(1),edge_dist_array(1) 
+    call get_landmark_pts_onlymem(ndmax,nd,nx,ny,nz,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array) !use c++ program to get distances to landmark poitns
     call MDS_ISOMAP(ndmax,nd,nx,ny,nz) !do the multidimensinoal scaling
     !now have coord of all grid points in coord_ISOMAP(NODES,dim)
 end if
@@ -1136,6 +1149,10 @@ end if
       elapsed=secnds(total)
       write(*,'(f10.4,a)')      elapsed, 's - time to finish multidimensional scaling'
       write(time_out2,'(f10.4,a)')      elapsed, 's - time to finish multidimensional scaling'
+
+
+stop
+
 
 !what is the max C?
           ivarg = 1
