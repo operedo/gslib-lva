@@ -51,11 +51,12 @@ using namespace boost;
 
 
 //void dijkstra(string s) 
-void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_array1, int* cur_edge_node_array2, double* edge_dist_array) 
+void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_array1, int* cur_edge_node_array2, double* edge_dist_array, int* NODES2CAL_LENGTH, int* nodes2cal_array, double* coord_ISOMAP) 
 { 
     cout << "Begin dijkstra" << endl;
 
-    cout << *NODES_LENGTH <<" " << *GRID_OUT_LENGTH << " " << *(cur_edge_node_array1+0) << " " <<  *(cur_edge_node_array2+0) << " " << *(edge_dist_array) << endl; 
+//    cout << *NODES_LENGTH <<" " << *GRID_OUT_LENGTH << " " << *(cur_edge_node_array1+0) << " " <<  *(cur_edge_node_array2+0) << " " << *(edge_dist_array) << endl;
+    cout << *(coord_ISOMAP+0) << " "<< *(coord_ISOMAP+1) << " " << *(coord_ISOMAP+*NODES_LENGTH) << endl;
 
 //     start the timer
     time_t start_time, end_time;
@@ -153,21 +154,24 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 //remember in c++ the ind = indFORTRAN-1
 
     int nodes2cal,cur_node;
-    string nfile_str = "nodes2cal.out";
-    strcpy(nfile, nfile_str.c_str());
-    ifstream infile2( nfile, ios::in ); 
-    infile2.getline(buffer, 128);
-    instream.clear() ;
-    instream.str(buffer) ;
-    instream >> nodes2cal;
+    //string nfile_str = "nodes2cal.out";
+    //strcpy(nfile, nfile_str.c_str());
+    //ifstream infile2( nfile, ios::in ); 
+    //infile2.getline(buffer, 128);
+    //instream.clear() ;
+    //instream.str(buffer) ;
+    //instream >> nodes2cal;
+
+    nodes2cal = *NODES2CAL_LENGTH;
+
     cout << "working out distances to ";cout << nodes2cal; cout << " nodes"; cout << endl; 
-    cout << "NODE:"; cout << endl; 
+    //cout << "NODE:"; cout << endl; 
 
 
 #ifndef _OPENMP
     //now need to be able to write out the distances
-    ofstream outfile;
-    outfile.open ("dist_cpp.out");
+//    ofstream outfile;
+//    outfile.open ("dist_cpp.out");
     diff_time=0;
     for (int i=0; i<nodes2cal; ++i) 
     //for (int i=0; i<4; ++i) 
@@ -175,10 +179,11 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 //        cout << i + 1 << flush; 
 //        cout << endl; 
 
-        infile2.getline(buffer, 128);
-        instream.clear() ;
-        instream.str(buffer) ;
-        instream >> cur_node;
+        //infile2.getline(buffer, 128);
+        //instream.clear() ;
+        //instream.str(buffer) ;
+        //instream >> cur_node;
+        cur_node=nodes2cal_array[i];
 
         vertex_descriptor s = vertex(cur_node-1, g);  //node number output from fortran program will always be +1 (C++ starts at 0 not 1)
          start_time = time(NULL);
@@ -208,11 +213,12 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
         //write these distances out
 	// Descomentar para escribir resultado
 	// Comentar para medir speedup y escalabilidad
-	
-//        for (int i=0; i<num_nodes; ++i) 
-//        {
-//            outfile << d[i] <<  endl ; 
-//        }  
+	int inodes_length=i*(*NODES_LENGTH);
+        for (int j=0; j<num_nodes; ++j) 
+        {
+            //outfile << d[j] <<  endl ; 
+            *(coord_ISOMAP+inodes_length+j)=d[j];
+        }  
 	
 
          end_time=time(NULL);
@@ -240,17 +246,20 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 
     for (int i=0; i<nodes2cal; ++i) 
     {
-        infile2.getline(buffer, 128);
-        instream.clear() ;
-        instream.str(buffer) ;
-        instream >> cur_node_array[i];
+        //infile2.getline(buffer, 128);
+        //instream.clear() ;
+        //instream.str(buffer) ;
+        //instream >> cur_node_array[i];
+
+        cur_node_array[i] = nodes2cal_array[i];
+
     }
 
     diff_time=0;
     start_time = time(NULL);
 
 #pragma omp parallel default(none) firstprivate(this_thread,stringout,cur_node,p,d) \
-                                   shared(num_nodes,num_threads,nodes2cal,cout,cur_node_array,g)
+                                   shared(num_nodes,num_threads,nodes2cal,cout,cur_node_array,g,coord_ISOMAP,NODES_LENGTH)
 {
     this_thread = omp_get_thread_num();
     char num2str[21];
@@ -271,8 +280,8 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 
     //cout << this_thread << ":" << stringoutLocal << endl;
 
-    ofstream outfile;
-    outfile.open(stringoutLocal.c_str());
+//    ofstream outfile;
+//    outfile.open(stringoutLocal.c_str());
 
 #pragma omp for nowait
     for (int i=0; i<nodes2cal; ++i) 
@@ -308,23 +317,28 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
         // Descomentar para escribir resultado
         // Comentar para medir speedup y escalabilidad
         
+        //for (int j=0; j<num_nodes; ++j) 
+        //{
+        //    outfile << d[j] <<  endl ; 
+        //}  
+    	int inodes_length=i*(*NODES_LENGTH);
         for (int j=0; j<num_nodes; ++j) 
         {
-            outfile << d[j] <<  endl ; 
-        }  
-        
+            //outfile << d[j] <<  endl ; 
+            *(coord_ISOMAP+inodes_length+j)=d[j];
+        }    
 
     }
 
 
-    outfile.close();
+//    outfile.close();
 
 }
 
     end_time=time(NULL);
     diff_time=diff_time + end_time-start_time;
     cout << "time for one path:  " << float(diff_time)/float(nodes2cal) <<  " s" << endl ;
-    cout << "done dijkstra"; 
+    cout << "done dijkstra" << endl; 
 
 
 #endif

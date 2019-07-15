@@ -1007,8 +1007,9 @@ koption=0
     real*8, allocatable :: edge_dist_array(:)
     integer, allocatable :: nodes2cal_array(:)
 
-
-
+    real :: rndtest
+    real*8 :: sumdiff, sumdiffsq, maxdiff, mindiff
+    integer :: STATS_SAMPLE
  
     allocate(results(ndmax))
 
@@ -1146,429 +1147,486 @@ koption=0
 !this routine will fix the distances according to landmark (ISOMAP) multi dim scaling
 !
     if(MDS_opt==2 .or. MDS_opt==3) then
-         !call get_landmark_pts(ndmax,nd,nx,ny,nz) !use c++ program to get distances to landmark poitns
-         write(*,*) NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1(1),cur_edge_node_array2(1),edge_dist_array(1) 
-         call get_landmark_pts_onlymem(ndmax,nd,nx,ny,nz,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array,NODES2CAL_LENGTH,nodes2cal_array) !use c++ program to get distances to landmark poitns
-         call MDS_ISOMAP(ndmax,nd,nx,ny,nz) !do the multidimensinoal scaling
-         !now have coord of all grid points in coord_ISOMAP(NODES,dim)
+
+        call init_genrand(seedd)  !intial the random generator
+        do i=1,10000
+            rand_num = grnd()
+        end do
+        
+        allocate(temp_order(nx*ny*nz,2))
+        !use sim array as a temp array for the order
+        do i=1,nx*ny*nz
+            temp_order(i,1) = grnd()
+            temp_order(i,2) = dble(i)
+        end do
+    
+        !call sortem(1,nx*ny*nz,temp_order(:,1),1,temp_order(:,2))   !now have the simulation order
+        call sortem2dp(1,nx*ny*nz,temp_order(:,1),1,temp_order(:,2))   !now have the simulation order
+    
+        allocate(order(nx*ny*nz))
+        order = int(temp_order(:,2))
+        
+
+
+        call get_landmark_pts_onlymem(ndmax,nd,nx,ny,nz,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array) !use c++ program to get distances to landmark poitns
+        call MDS_ISOMAP(ndmax,nd,nx,ny,nz) !do the multidimensinoal scaling
+
+        
+        STATS_SAMPLE = 50000
+        do i=1,STATS_SAMPLE
+           temp_order(i,1)=sqrt ( sum( ( coord_ISOMAP(order(nxyz-i),1:dim)-coord_ISOMAP(order(nxyz-i-1),1:dim) ) **2    )    )
+           !write(*,*) order(nxyz-i),order(nxyz-i-1),temp_order(i,1)  ,coord_ISOMAP(order(nxyz-i),1:dim)  
+        end do
+
+        do NODES2CAL_LENGTH=1000,100,-50
+        !NODES2CAL_LENGTH=950
+
+        if(allocated(coord_ISOMAP)) deallocate(coord_ISOMAP)
+        if(allocated(nodes2cal_array)) deallocate(nodes2cal_array)
+
+        allocate(nodes2cal_array(NODES2CAL_LENGTH))
+        nodes2cal_array = order(1:NODES2CAL_LENGTH) 
+        
+        call get_landmark_pts_onlymem_xyzland(ndmax,nd,nx,ny,nz,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array,NODES2CAL_LENGTH,nodes2cal_array) !use c++ program to get distances to landmark poitns
+        !call MDS_ISOMAP(ndmax,nd,nx,ny,nz) !do the multidimensinoal scaling
+        call MDS_ISOMAP_xyzland(ndmax,nd,nx,ny,nz,NODES2CAL_LENGTH) !do the multidimensinoal scaling
+
+        sumdiff=0.0
+        sumdiffsq=0.0
+        maxdiff=-1000000000.0
+        mindiff= 1000000000.0
+        do i=1,STATS_SAMPLE
+           temp_order(i,2)=sqrt ( sum( ( coord_ISOMAP(order(nxyz-i),1:dim)-coord_ISOMAP(order(nxyz-i-1),1:dim) ) **2    )    )
+           !write(*,*) order(nxyz-i),order(nxyz-i-1),temp_order(i,2)   
+           sumdiff = sumdiff + temp_order(i,2)/temp_order(i,1)
+           !sumdiffsq = sumdiffsq + (temp_order(i,2)/temp_order(i,1))*(temp_order(i,2)/temp_order(i,1)) 
+           maxdiff = MAX(maxdiff,temp_order(i,2)/temp_order(i,1))
+           mindiff = MIN(mindiff,temp_order(i,2)/temp_order(i,1))
+        end do
+        write(*,*) 'STATS: ',STATS_SAMPLE,NODES2CAL_LENGTH,(sumdiff/STATS_SAMPLE),mindiff,maxdiff
+
+        end do
+
+        deallocate(temp_order)
+
     end if
 
     elapsed=secnds(total)
     write(*,'(f10.4,a)')      elapsed, 's - time to finish multidimensional scaling'
-!    write(time_out2,'(f10.4,a)')      elapsed, 's - time to finish multidimensional scaling'
-
-!    start_time=secnds(0.0)
-!what is the max C?
-    ivarg = 1
-    cmax   = c0(ivarg)
-    istart = 1 + (ivarg-1)*MAXNST          
-    do is=1,nst(ivarg)
-          ist = istart + is - 1
-          if(it(ist).eq.4) then
-                cmax = cmax + PMX
-          else
-                cmax = cmax + cc(ist)
-          endif
-    end do
-
-
-!set up the kdtree for searching:
-    if(d_tree>dim .or. d_tree<1) then
-      d_tree=dim
-      write(*,'(a,I5)') 'actual number of dim to use in the search: ',d_tree
-    end if
-    
-    
-    nclose = min(nd,ndmax)
-  
-!set up the logical array for searching the tree:
-    allocate(is_usable(nx*ny*nz), useablemap(nx*ny*nz))
-
-!now set all the data locations to usable:
-    is_usable=.false.
-    is_usable(data_ind(1:nd)) = .true.
-
-
-    tree => kdtree2_create(nx,ny,nz,NODES,sort=.true.,rearrange=.true.)  ! this is how you create a tree. 
- 
-    
-!Build a map array so that the is_usable array can be updated
-!in the case where the kdtree rearranges the data
-    if(tree%rearrange)then
-       do i=1, nx*ny*nz
-           useablemap(tree%ind(i)) = i
-       enddo
-    endif
- 
-    sum_time=0
-
-! MAIN LOOP OVER ALL THE BLOCKS IN THE GRID
-    write(*,*)
-    write(*,*) 'Preparing the simulation '
-
-
-!need to make an order for the simulation:
-    
-    call init_genrand(seedd)  !intial the random generator
-    do i=1,10000
-        rand_num = grnd()
-    end do
-    
-    allocate(temp_order(nx*ny*nz,2))
-    !use sim array as a temp array for the order
-    do i=1,nx*ny*nz
-        temp_order(i,1) = grnd()
-        temp_order(i,2) = dble(i)
-    end do
-
-    !call sortem(1,nx*ny*nz,temp_order(:,1),1,temp_order(:,2))   !now have the simulation order
-    call sortem2dp(1,nx*ny*nz,temp_order(:,1),1,temp_order(:,2))   !now have the simulation order
-
-    allocate(order(nx*ny*nz))
-    order = int(temp_order(:,2))
-    
-    deallocate(temp_order)
-
-
-    allocate(sim(nx*ny*nz,nreal),stat = test)
-    if(test.ne.0)then
-    
-          write(*,*)'ERROR: Allocation of sim array failed due to', &
-                ' insufficient memory.'
-          do 
-            nreal = nreal-1
-            if(allocated(sim)) deallocate(sim)
-            allocate(sim(nx*ny*nz,nreal),stat = test)
-            if(test == 0 .or. nreal==0) then
-                exit
-            end if           
-          end do
-          nreal=nreal-1 !leave some memory for onther opperations
-          deallocate(sim)
-          allocate(sim(nx*ny*nz,nreal),stat = test)
-          if(nreal <= 0 ) then
-              write(*,'(a)' ) 'ERROR: your grid is too large, cannot allocate for even a single realization'
-              write(*,'(a)' ) 'STOPPING'
-              stop
-          end if
-          write(*,'(a,I5,a)') 'ERROR: can only simulate ', nreal, ' realizations'
-    end if
-    
-    allocate(est(nreal) )
-    sim=-999  !reset the sim array
-    
-    do ireal=1,nreal
-       sim(data_ind(1:nd),ireal) = vr(1:nd)
-    end do
-
-    use_kd_tree=.true.  ! if =.false. will start with an exhaustive search, and used kd when it is more efficient
-    !use_kd_tree=.false.  ! if =.false. will start with an exhaustive search, and used kd when it is more efficient
-    !can set this =.true. and will always use the kd tree.
-    
-    allocate(ex_results_d(nclose))
-    allocate(ex_results(nclose))
-    
-    allocate(ex_sim_array(nloop+nd))
-    n_searched=0    
-    ex_sim_array=-999
-    ex_sim_array(1:nd) = data_ind(1:nd)
-    
-!    sum_time = secnds(start_time)
-!Write(*,*) 'setting arrays and variables for simulation',sum_time
-    elapsed=secnds(total)
-    write(*,'(f10.4,a)')      elapsed, 's - time to setting arrays and variables for simulation'
-    
-    write(*,*)
-    write(*,*) 'Working on the simulation '
-    
-!    start_time=secnds(0.0)
-    do index2=1,nloop
-!    do index2=1,10001
-
-      if((int(index2/irepo)*irepo).eq.index2) then
-         write(*,103) index2
- 103  format('   currently on estimate ',i9)
-      end if      
+!!    write(time_out2,'(f10.4,a)')      elapsed, 's - time to finish multidimensional scaling'
 !
-! Where are we making an estimate?
-!
-      if(koption.eq.0) then
-
-            !write(*,*)'koption.eq.0'
-
-            index = order(index2)
-            iz   = int((index-1)/nxy) + 1
-            iy   = int((index-(iz-1)*nxy-1)/nx) + 1
-            ix   = index - (iz-1)*nxy - (iy-1)*nx
-            xloc = xmn + real(ix-1)*xsiz
-            yloc = ymn + real(iy-1)*ysiz
-            zloc = zmn + real(iz-1)*zsiz
-            !write(*,*)index2,index,ix,iy,iz,xloc,yloc,zloc
-      else
-        !make cross validation
-            !write(*,*)'koption.ne.0'
-            read(ljack,*,err=96,end=2) (var(i),i=1,nvarij)
-            ddh  = 0.0
-            xloc = xmn
-            yloc = ymn
-            zloc = zmn
-            true = UNEST
-            secj = UNEST
-            if(idhlj.gt.0)  ddh    = var(idhlj)
-            if(ixlj.gt.0)   xloc   = var(ixlj)
-            if(iylj.gt.0)   yloc   = var(iylj)
-            if(izlj.gt.0)   zloc   = var(izlj)
-            if(ivrlj.gt.0)  true   = var(ivrlj)
-            if(iextvj.gt.0) extest = var(iextvj)
-            if(true.lt.tmin.or.true.ge.tmax) true = UNEST
-            !index in now ...
-            call getindx(nx,xmn,xsiz,xloc,ix,inflag)
-            call getindx(ny,ymn,ysiz,yloc,iy,inflag)
-            call getindx(nz,zmn,zsiz,zloc,iz,inflag)
-
-            index = ix + (iy-1)*nx + (iz-1) * nx*ny 
-      end if
-      
-      !get the close data in an array 'results'
-      nclose = min(nd,ndmax)
-     
-      !the tree is only efficient if it is fairly full, do 1000 with an exhaustive search and then test tree,
-      !once the tree is efficient only use the tree
-      if(n_searched == 1000 .and. not(use_kd_tree)) then
-              
-!          n_searched=0
-!          time_temp=secnds(real(0.0,4))
-!          do i=1,10
-!          call kdtree2_n_nearest_around_point(real(coord_ISOMAP(index,1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
-!          end do
-!          kd_time=secnds(time_temp)
-!          
-!          
-!          !do exhaustive search to test for time
-!          time_temp=secnds(real(0.0,4))
-!          do i=1,10
-!          call exhaustive_srch(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results, ex_results_d,nd+index2)
-!          end do
-!          exhaustive_srch_time=secnds(time_temp)
-!          
-!          if(kd_time<exhaustive_srch_time) use_kd_tree = .true.  !from now on use the kd tree
-         
-      else
-          n_searched=n_searched+1
-      end if
-     
-     
-      !do the search, for the first few locations it is faster to do an exhaustive search
-      if(use_kd_tree) then
-         call kdtree2_n_nearest_around_point(real(coord_ISOMAP(index,1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
-         !write(*,*) 'calculating neighbours (kdtree) for node ',index 
-      else
-         call exhaustive_srch(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
-         
-         !fill the results array:
-
-         
-         results(:).dis = ex_results_d(1:nclose)
-         results(:).idx = ex_results(1:nclose)
-         ex_sim_array(nd+index2) = index
-         
-         !write(*,*) 'calculating neighbours (exhaustive) for node ',index 
-      end if
-      tree%REARRANGED_IS_USABLE(useablemap(index)) = .true.  !need to tell the tree that this point is now simulated:
-
-      !do we need to trim out some of the points found?
-      do i=1,min(nd,ndmax)
-         if(results(i).dis>radsqd) then
-            nclose=nclose-1
-         end if
-      end do
-
-!      !how many eqns for kriging?
-!      neq=nclose
-!      if(ktype==1) neq=neq+1
-!      !
-!      ! Initialize the main kriging matrix:
-!      a = 0.0
-!      !
-!      ! Fill in the LHS kriging matrix:
-!      !
-!
-!      !need to calculate the covariances:
-!      do i=1,nclose
-!         ind1=results(i).idx
-!         do j=i,nclose
-!            ind2=results(j).idx
-!            dist=sqrt ( sum( ( coord_ISOMAP(ind1,1:dim)-coord_ISOMAP(ind2,1:dim) ) **2    )    )
-!            call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,a(neq*(i-1)+j)) 
-!            a(neq*(j-1)+i) = a(neq*(i-1)+j)
-!         end do
-!      end do
-!      !
-!      ! Fill in the OK unbiasedness portion of the matrix (if not doing SK):
-!      !
-!      if(ktype==1) then
-!         do i=1,nclose
-!            a(neq*(i-1)+nclose+1) = dble(cmax)
-!            a(neq*nclose+i)       = dble(cmax)
-!         end do
-!      endif
-!      !
-!      ! Fill in the RHS kriging matrix (r):
-!      !
-!      r=cmax !so that if we are doing OK the last term is set to 1 (sum of weights=1)
-!      do i=1,nclose
-!          !cal the distance first then the covariance
-!          ind1 = results(i).idx
-!          vra(i,:)=sim(ind1,:) 
-!          if(d_tree/=dim) then
-!              dist=results(i).dis + sum( ( coord_ISOMAP(ind1,d_tree+1:dim)-coord_ISOMAP(index,d_tree+1:dim) ) **2    ) !dist in tree is only for the first few dims
+!!    start_time=secnds(0.0)
+!!what is the max C?
+!    ivarg = 1
+!    cmax   = c0(ivarg)
+!    istart = 1 + (ivarg-1)*MAXNST          
+!    do is=1,nst(ivarg)
+!          ist = istart + is - 1
+!          if(it(ist).eq.4) then
+!                cmax = cmax + PMX
 !          else
-!              dist=results(i).dis 
+!                cmax = cmax + cc(ist)
+!          endif
+!    end do
+!
+!
+!!set up the kdtree for searching:
+!    if(d_tree>dim .or. d_tree<1) then
+!      d_tree=dim
+!      write(*,'(a,I5)') 'actual number of dim to use in the search: ',d_tree
+!    end if
+!    
+!    
+!    nclose = min(nd,ndmax)
+!  
+!!set up the logical array for searching the tree:
+!    allocate(is_usable(nx*ny*nz), useablemap(nx*ny*nz))
+!
+!!now set all the data locations to usable:
+!    is_usable=.false.
+!    is_usable(data_ind(1:nd)) = .true.
+!
+!
+!    tree => kdtree2_create(nx,ny,nz,NODES,sort=.true.,rearrange=.true.)  ! this is how you create a tree. 
+! 
+!    
+!!Build a map array so that the is_usable array can be updated
+!!in the case where the kdtree rearranges the data
+!    if(tree%rearrange)then
+!       do i=1, nx*ny*nz
+!           useablemap(tree%ind(i)) = i
+!       enddo
+!    endif
+! 
+!    sum_time=0
+!
+!! MAIN LOOP OVER ALL THE BLOCKS IN THE GRID
+!    write(*,*)
+!    write(*,*) 'Preparing the simulation '
+!
+!
+!!need to make an order for the simulation:
+!    
+!    call init_genrand(seedd)  !intial the random generator
+!    do i=1,10000
+!        rand_num = grnd()
+!    end do
+!    
+!    allocate(temp_order(nx*ny*nz,2))
+!    !use sim array as a temp array for the order
+!    do i=1,nx*ny*nz
+!        temp_order(i,1) = grnd()
+!        temp_order(i,2) = dble(i)
+!    end do
+!
+!    !call sortem(1,nx*ny*nz,temp_order(:,1),1,temp_order(:,2))   !now have the simulation order
+!    call sortem2dp(1,nx*ny*nz,temp_order(:,1),1,temp_order(:,2))   !now have the simulation order
+!
+!    allocate(order(nx*ny*nz))
+!    order = int(temp_order(:,2))
+!    
+!    deallocate(temp_order)
+!
+!
+!    allocate(sim(nx*ny*nz,nreal),stat = test)
+!    if(test.ne.0)then
+!    
+!          write(*,*)'ERROR: Allocation of sim array failed due to', &
+!                ' insufficient memory.'
+!          do 
+!            nreal = nreal-1
+!            if(allocated(sim)) deallocate(sim)
+!            allocate(sim(nx*ny*nz,nreal),stat = test)
+!            if(test == 0 .or. nreal==0) then
+!                exit
+!            end if           
+!          end do
+!          nreal=nreal-1 !leave some memory for onther opperations
+!          deallocate(sim)
+!          allocate(sim(nx*ny*nz,nreal),stat = test)
+!          if(nreal <= 0 ) then
+!              write(*,'(a)' ) 'ERROR: your grid is too large, cannot allocate for even a single realization'
+!              write(*,'(a)' ) 'STOPPING'
+!              stop
 !          end if
-!          dist=sqrt(dist)
-!          call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,r(i)) 
-!      end do
-!      !
-!      ! Copy the right hand side to compute the kriging variance later:
-!      !
-!      do k=1,neq
-!            rr(k) = r(k)
-!      end do
-!      kadim = neq * neq
-!      ksdim = neq
-!      nrhs  = 1
-!      nv    = 1
-!!
-!! Write out the kriging Matrix if Seriously Debugging:
-!!
-!      if(idbg.eq.3) then
-!            write(ldbg,*) 'Estimating node index : ',ix,iy,iz
-!            is = 1 - neq
-!            do i=1,neq
-!                  is = 1 + (i-1)*neq
-!                  ie = is + neq - 1
-!                  write(ldbg,100) i,r(i),(a(j),j=is,ie)
-! 100              format('    r(',i2,') =',f7.4,'  a= ',9(10f7.4))
-!            end do
-!      endif
-!      
-!      estv=-999
-!      !
-!      ! Solve the kriging system:
-!      !
-!      if(nclose>0 ) call ktsol(neq,nrhs,nv,a,r,s,ising,MAXEQ)
+!          write(*,'(a,I5,a)') 'ERROR: can only simulate ', nreal, ' realizations'
+!    end if
+!    
+!    allocate(est(nreal) )
+!    sim=-999  !reset the sim array
+!    
+!    do ireal=1,nreal
+!       sim(data_ind(1:nd),ireal) = vr(1:nd)
+!    end do
 !
-!      ! Compute the solution:
-!      if(nclose == 1 ) then
-!         ising=0
-!         s(1) = r(1) ;
-!      end if
-!      if(ising.ne.0) then
-!            if(idbg.ge.3) write(ldbg,*) ' Singular Matrix ',ix,iy,iz
-!            est  = UNEST
-!            estv = UNEST
-!      else if(nclose<ndmin) then
-!            if(idbg.ge.3) write(ldbg,*) ' not enough data to estimate '
-!            est  = UNEST
-!            estv = UNEST
+!    use_kd_tree=.true.  ! if =.false. will start with an exhaustive search, and used kd when it is more efficient
+!    !use_kd_tree=.false.  ! if =.false. will start with an exhaustive search, and used kd when it is more efficient
+!    !can set this =.true. and will always use the kd tree.
+!    
+!    allocate(ex_results_d(nclose))
+!    allocate(ex_results(nclose))
+!    
+!    allocate(ex_sim_array(nloop+nd))
+!    n_searched=0    
+!    ex_sim_array=-999
+!    ex_sim_array(1:nd) = data_ind(1:nd)
+!    
+!!    sum_time = secnds(start_time)
+!!Write(*,*) 'setting arrays and variables for simulation',sum_time
+!    elapsed=secnds(total)
+!    write(*,'(f10.4,a)')      elapsed, 's - time to setting arrays and variables for simulation'
+!    
+!    write(*,*)
+!    write(*,*) 'Working on the simulation '
+!    
+!!    start_time=secnds(0.0)
+!    do index2=1,nloop
+!!    do index2=1,10001
+!
+!      if((int(index2/irepo)*irepo).eq.index2) then
+!         write(*,103) index2
+! 103  format('   currently on estimate ',i9)
+!      end if      
+!!
+!! Where are we making an estimate?
+!!
+!      if(koption.eq.0) then
+!
+!            !write(*,*)'koption.eq.0'
+!
+!            index = order(index2)
+!            iz   = int((index-1)/nxy) + 1
+!            iy   = int((index-(iz-1)*nxy-1)/nx) + 1
+!            ix   = index - (iz-1)*nxy - (iy-1)*nx
+!            xloc = xmn + real(ix-1)*xsiz
+!            yloc = ymn + real(iy-1)*ysiz
+!            zloc = zmn + real(iz-1)*zsiz
+!            !write(*,*)index2,index,ix,iy,iz,xloc,yloc,zloc
 !      else
-!            est  = 0.0
-!            estv = real(cmax)
-!            do j=1,neq   
-!            
-!                      estv = estv - real(s(j))*rr(j)
-!                      if(j.le.nclose) then
-!                            if(ktype.eq.0) then
-!                                  est(:) = est(:) + real(s(j))*(vra(j,:)-skmean)
-!                            else
-!                                  est(:) = est(:) + real(s(j))*vra(j,:)
-!                            endif
-!                      endif
-!            end do
-!            if(ktype.eq.0.or.ktype.eq.2) est = est + skmean
-!            nk   = nk + 1
+!        !make cross validation
+!            !write(*,*)'koption.ne.0'
+!            read(ljack,*,err=96,end=2) (var(i),i=1,nvarij)
+!            ddh  = 0.0
+!            xloc = xmn
+!            yloc = ymn
+!            zloc = zmn
+!            true = UNEST
+!            secj = UNEST
+!            if(idhlj.gt.0)  ddh    = var(idhlj)
+!            if(ixlj.gt.0)   xloc   = var(ixlj)
+!            if(iylj.gt.0)   yloc   = var(iylj)
+!            if(izlj.gt.0)   zloc   = var(izlj)
+!            if(ivrlj.gt.0)  true   = var(ivrlj)
+!            if(iextvj.gt.0) extest = var(iextvj)
+!            if(true.lt.tmin.or.true.ge.tmax) true = UNEST
+!            !index in now ...
+!            call getindx(nx,xmn,xsiz,xloc,ix,inflag)
+!            call getindx(ny,ymn,ysiz,yloc,iy,inflag)
+!            call getindx(nz,zmn,zsiz,zloc,iz,inflag)
 !
-!            !
-!            ! Write the kriging weights and data if debugging level is above 2:
-!            !
-!            if(idbg.ge.2) then
-!                  write(ldbg,*) '       '
-!                  write(ldbg,*) 'BLOCK: ',ix,iy,iz,' at ',xloc,yloc,zloc
-!                  write(ldbg,*) '       '
-!                  if(ktype.ne.0)  &
-!                  write(ldbg,*) '  Lagrange : ',s(na+1)*unbias
-!                  write(ldbg,*) '  BLOCK EST: x,y,z,vr,wt '
-!                  do i=1,na
-!                        xa(i) = xa(i) + xloc - 0.5*xsiz
-!                        ya(i) = ya(i) + yloc - 0.5*ysiz
-!                        za(i) = za(i) + zloc - 0.5*zsiz
-!                        write(ldbg,'(50f12.3)') xa(i),ya(i),za(i), &
-!                                              vra(i,:),s(i)
-!                  end do
-!                  write(ldbg,*) '  estimate, variance  ',est,estv
-!            endif
-!      endif
-
-!
-! END OF MAIN KRIGING LOOP:
-!
- 1    continue
- 
- !need to draw from the gaussian distribution with this est and var:  (est,estv)
-
-!      if(nclose<ndmin .or. nclose == 0) then
-!         est = 0.0  !the global mean
-!         estv = 1.0
+!            index = ix + (iy-1)*nx + (iz-1) * nx*ny 
 !      end if
 !      
-!      !if (abs(estv) <= 1e-10 ) estv = 0.0
-!      if (abs(estv) <= 1e-7 ) estv = 0.0
+!      !get the close data in an array 'results'
+!      nclose = min(nd,ndmax)
+!     
+!      !the tree is only efficient if it is fairly full, do 1000 with an exhaustive search and then test tree,
+!      !once the tree is efficient only use the tree
+!      if(n_searched == 1000 .and. not(use_kd_tree)) then
+!              
+!!          n_searched=0
+!!          time_temp=secnds(real(0.0,4))
+!!          do i=1,10
+!!          call kdtree2_n_nearest_around_point(real(coord_ISOMAP(index,1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
+!!          end do
+!!          kd_time=secnds(time_temp)
+!!          
+!!          
+!!          !do exhaustive search to test for time
+!!          time_temp=secnds(real(0.0,4))
+!!          do i=1,10
+!!          call exhaustive_srch(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results, ex_results_d,nd+index2)
+!!          end do
+!!          exhaustive_srch_time=secnds(time_temp)
+!!          
+!!          if(kd_time<exhaustive_srch_time) use_kd_tree = .true.  !from now on use the kd tree
+!         
+!      else
+!          n_searched=n_searched+1
+!      end if
+!     
+!     
+!      !do the search, for the first few locations it is faster to do an exhaustive search
+!      if(use_kd_tree) then
+!         call kdtree2_n_nearest_around_point(real(coord_ISOMAP(index,1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
+!         !write(*,*) 'calculating neighbours (kdtree) for node ',index 
+!      else
+!         call exhaustive_srch(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
+!         
+!         !fill the results array:
 !
-!      estv=sqrt(estv)     
-!               
-!      do ireal=1,nreal
-!         pp = grnd()
-!         call gauinv(pp,xpp,ierr)
-!         sim(index,ireal) = xpp * estv + est(ireal)
+!         
+!         results(:).dis = ex_results_d(1:nclose)
+!         results(:).idx = ex_results(1:nclose)
+!         ex_sim_array(nd+index2) = index
+!         
+!         !write(*,*) 'calculating neighbours (exhaustive) for node ',index 
+!      end if
+!      tree%REARRANGED_IS_USABLE(useablemap(index)) = .true.  !need to tell the tree that this point is now simulated:
+!
+!      !do we need to trim out some of the points found?
+!      do i=1,min(nd,ndmax)
+!         if(results(i).dis>radsqd) then
+!            nclose=nclose-1
+!         end if
 !      end do
-
-      end do
- 2    continue
-      if(koption.gt.0) close(ljack)
-!    sum_time = secnds(start_time)
-!Write(*,*) 'simulating points',sum_time
-    elapsed=secnds(total)
-    write(*,'(f10.4,a)')      elapsed, 's - time of simulation'
 !
-! Write statistics of kriged values:
+!!      !how many eqns for kriging?
+!!      neq=nclose
+!!      if(ktype==1) neq=neq+1
+!!      !
+!!      ! Initialize the main kriging matrix:
+!!      a = 0.0
+!!      !
+!!      ! Fill in the LHS kriging matrix:
+!!      !
+!!
+!!      !need to calculate the covariances:
+!!      do i=1,nclose
+!!         ind1=results(i).idx
+!!         do j=i,nclose
+!!            ind2=results(j).idx
+!!            dist=sqrt ( sum( ( coord_ISOMAP(ind1,1:dim)-coord_ISOMAP(ind2,1:dim) ) **2    )    )
+!!            call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,a(neq*(i-1)+j)) 
+!!            a(neq*(j-1)+i) = a(neq*(i-1)+j)
+!!         end do
+!!      end do
+!!      !
+!!      ! Fill in the OK unbiasedness portion of the matrix (if not doing SK):
+!!      !
+!!      if(ktype==1) then
+!!         do i=1,nclose
+!!            a(neq*(i-1)+nclose+1) = dble(cmax)
+!!            a(neq*nclose+i)       = dble(cmax)
+!!         end do
+!!      endif
+!!      !
+!!      ! Fill in the RHS kriging matrix (r):
+!!      !
+!!      r=cmax !so that if we are doing OK the last term is set to 1 (sum of weights=1)
+!!      do i=1,nclose
+!!          !cal the distance first then the covariance
+!!          ind1 = results(i).idx
+!!          vra(i,:)=sim(ind1,:) 
+!!          if(d_tree/=dim) then
+!!              dist=results(i).dis + sum( ( coord_ISOMAP(ind1,d_tree+1:dim)-coord_ISOMAP(index,d_tree+1:dim) ) **2    ) !dist in tree is only for the first few dims
+!!          else
+!!              dist=results(i).dis 
+!!          end if
+!!          dist=sqrt(dist)
+!!          call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,r(i)) 
+!!      end do
+!!      !
+!!      ! Copy the right hand side to compute the kriging variance later:
+!!      !
+!!      do k=1,neq
+!!            rr(k) = r(k)
+!!      end do
+!!      kadim = neq * neq
+!!      ksdim = neq
+!!      nrhs  = 1
+!!      nv    = 1
+!!!
+!!! Write out the kriging Matrix if Seriously Debugging:
+!!!
+!!      if(idbg.eq.3) then
+!!            write(ldbg,*) 'Estimating node index : ',ix,iy,iz
+!!            is = 1 - neq
+!!            do i=1,neq
+!!                  is = 1 + (i-1)*neq
+!!                  ie = is + neq - 1
+!!                  write(ldbg,100) i,r(i),(a(j),j=is,ie)
+!! 100              format('    r(',i2,') =',f7.4,'  a= ',9(10f7.4))
+!!            end do
+!!      endif
+!!      
+!!      estv=-999
+!!      !
+!!      ! Solve the kriging system:
+!!      !
+!!      if(nclose>0 ) call ktsol(neq,nrhs,nv,a,r,s,ising,MAXEQ)
+!!
+!!      ! Compute the solution:
+!!      if(nclose == 1 ) then
+!!         ising=0
+!!         s(1) = r(1) ;
+!!      end if
+!!      if(ising.ne.0) then
+!!            if(idbg.ge.3) write(ldbg,*) ' Singular Matrix ',ix,iy,iz
+!!            est  = UNEST
+!!            estv = UNEST
+!!      else if(nclose<ndmin) then
+!!            if(idbg.ge.3) write(ldbg,*) ' not enough data to estimate '
+!!            est  = UNEST
+!!            estv = UNEST
+!!      else
+!!            est  = 0.0
+!!            estv = real(cmax)
+!!            do j=1,neq   
+!!            
+!!                      estv = estv - real(s(j))*rr(j)
+!!                      if(j.le.nclose) then
+!!                            if(ktype.eq.0) then
+!!                                  est(:) = est(:) + real(s(j))*(vra(j,:)-skmean)
+!!                            else
+!!                                  est(:) = est(:) + real(s(j))*vra(j,:)
+!!                            endif
+!!                      endif
+!!            end do
+!!            if(ktype.eq.0.or.ktype.eq.2) est = est + skmean
+!!            nk   = nk + 1
+!!
+!!            !
+!!            ! Write the kriging weights and data if debugging level is above 2:
+!!            !
+!!            if(idbg.ge.2) then
+!!                  write(ldbg,*) '       '
+!!                  write(ldbg,*) 'BLOCK: ',ix,iy,iz,' at ',xloc,yloc,zloc
+!!                  write(ldbg,*) '       '
+!!                  if(ktype.ne.0)  &
+!!                  write(ldbg,*) '  Lagrange : ',s(na+1)*unbias
+!!                  write(ldbg,*) '  BLOCK EST: x,y,z,vr,wt '
+!!                  do i=1,na
+!!                        xa(i) = xa(i) + xloc - 0.5*xsiz
+!!                        ya(i) = ya(i) + yloc - 0.5*ysiz
+!!                        za(i) = za(i) + zloc - 0.5*zsiz
+!!                        write(ldbg,'(50f12.3)') xa(i),ya(i),za(i), &
+!!                                              vra(i,:),s(i)
+!!                  end do
+!!                  write(ldbg,*) '  estimate, variance  ',est,estv
+!!            endif
+!!      endif
 !
- 
-      if(nk.gt.0.and.idbg.gt.0) then
-            xk    = xk/real(nk)
-            vk    = vk/real(nk) - xk*xk
-            xkmae = xkmae/real(nk)
-            xkmse = xkmse/real(nk)
-            write(ldbg,105) nk,xk,vk
-            write(*,   105) nk,xk,vk
- 105        format(/,'Estimated   ',i8,' blocks ',/, &
-                    '  average   ',g14.8,/,'  variance  ',g14.8,/)
-            if(koption.ne.0) then
-                  write(*,106) xkmae,xkmse
- 106              format(/,'  mean error',g14.8,/,'  mean sqd e',g14.8)
-            end if
-      endif
-
+!!
+!! END OF MAIN KRIGING LOOP:
+!!
+! 1    continue
+! 
+! !need to draw from the gaussian distribution with this est and var:  (est,estv)
 !
-! All finished the kriging:
+!!      if(nclose<ndmin .or. nclose == 0) then
+!!         est = 0.0  !the global mean
+!!         estv = 1.0
+!!      end if
+!!      
+!!      !if (abs(estv) <= 1e-10 ) estv = 0.0
+!!      if (abs(estv) <= 1e-7 ) estv = 0.0
+!!
+!!      estv=sqrt(estv)     
+!!               
+!!      do ireal=1,nreal
+!!         pp = grnd()
+!!         call gauinv(pp,xpp,ierr)
+!!         sim(index,ireal) = xpp * estv + est(ireal)
+!!      end do
 !
-      do i=1,nreal
-         write(lout,'(f10.4)') sim(:,i)
-      end do
-
-      deallocate(order)
-      deallocate(coord_ISOMAP)
-    elapsed=secnds(total)
-    write(*,'(f10.4,a)')      elapsed, 's - time of write out simulations'
+!      end do
+! 2    continue
+!      if(koption.gt.0) close(ljack)
+!!    sum_time = secnds(start_time)
+!!Write(*,*) 'simulating points',sum_time
+!    elapsed=secnds(total)
+!    write(*,'(f10.4,a)')      elapsed, 's - time of simulation'
+!!
+!! Write statistics of kriged values:
+!!
+! 
+!      if(nk.gt.0.and.idbg.gt.0) then
+!            xk    = xk/real(nk)
+!            vk    = vk/real(nk) - xk*xk
+!            xkmae = xkmae/real(nk)
+!            xkmse = xkmse/real(nk)
+!            write(ldbg,105) nk,xk,vk
+!            write(*,   105) nk,xk,vk
+! 105        format(/,'Estimated   ',i8,' blocks ',/, &
+!                    '  average   ',g14.8,/,'  variance  ',g14.8,/)
+!            if(koption.ne.0) then
+!                  write(*,106) xkmae,xkmse
+! 106              format(/,'  mean error',g14.8,/,'  mean sqd e',g14.8)
+!            end if
+!      endif
+!
+!!
+!! All finished the kriging:
+!!
+!      do i=1,nreal
+!         write(lout,'(f10.4)') sim(:,i)
+!      end do
+!
+!      deallocate(order)
+!      deallocate(coord_ISOMAP)
+!    elapsed=secnds(total)
+!    write(*,'(f10.4,a)')      elapsed, 's - time of write out simulations'
 
       return
  96   stop 'ERROR in jackknife file!'

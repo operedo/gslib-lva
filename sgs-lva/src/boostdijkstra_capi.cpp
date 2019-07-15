@@ -26,8 +26,8 @@ using namespace std;
 //    foo_speaker(string(s));
 //}
 
-void dijkstra(int* n,int* a, int* b, int* c, double* d){
-	dijkstra_cpp(n,a,b,c,d);
+void dijkstra(int* n,int* a, int* b, int* c, double* d, int* e, int* f, double* g){
+	dijkstra_cpp(n,a,b,c,d,e,f,g);
 }
 
 //void dijkstra(const char* s){

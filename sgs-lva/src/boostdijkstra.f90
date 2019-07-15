@@ -93,13 +93,16 @@ contains ! Implementation of the functions. We just wrap the C function here.
 !
 !        call dijkstra_c(c_str)
 !    end subroutine
-    subroutine dijkstra(n,a,b,c,d)
+    subroutine dijkstra(n,a,b,c,d,e,f,g)
         implicit none
         integer(C_INT), intent(in) :: n
         integer(C_INT), intent(in) :: a
         integer(C_INT), intent(in) :: b(:)
         integer(C_INT), intent(in) :: c(:)
         real(C_DOUBLE), intent(in) :: d(:)
+        integer(C_INT), intent(in) :: e
+        integer(C_INT), intent(in) :: f(:)
+        real(C_DOUBLE), intent(in) :: g(:,:)
 
 !        type(C_PTR), intent(in) :: b
 !        type(C_PTR), intent(in) :: c
@@ -117,6 +120,6 @@ contains ! Implementation of the functions. We just wrap the C function here.
 !        c_str(N + 1) = C_NULL_CHAR
 
 !        call dijkstra_c(c_str)
-        call dijkstra_c(n,a,b,c,d)
+        call dijkstra_c(n,a,b,c,d,e,f,g)
     end subroutine
 end module

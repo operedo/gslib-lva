@@ -21,6 +21,8 @@ CXX = g++
 
 KIND_OBJS=  
 F90_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva.o Scaling-ISOMAP_landmark.o
+F90_LEVELS_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva_levels.o Scaling-ISOMAP_landmark.o
+F90_OPTLAND_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva_optlandmarks.o Scaling-ISOMAP_landmark.o
 #FOR=chknam.for  getindx.for
 FOR_OBJS=chknam.o  getindx.o
 #LAPACK=LAPACK/eig.f90
@@ -151,12 +153,24 @@ OBJS=   eig.o solve.o
 CPP_OBJS= boostdijkstra.o boostdijkstra_capi.o Boostdijkstra.o
 
 ALL_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_OBJS)
+ALL_LEVELS_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_LEVELS_OBJS)
+ALL_OPTLAND_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_OPTLAND_OBJS)
 OUT=SGS_LVA
+OUT_LEVELS=SGS_LVA_levels
+OUT_OPTLAND=SGS_LVA_optland
 
 #Scaling-ISOMAP_landmark.o : boostdijkstra_mod.o
 
 default: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OBJS) -o $(OUT)
+	cp $(OUT) ../bin/
+
+levels: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_LEVELS_OBJS)
+	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_LEVELS_OBJS) -o $(OUT_LEVELS)
+	cp $(OUT) ../bin/
+
+optland: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OPTLAND_OBJS)
+	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OPTLAND_OBJS) -o $(OUT_OPTLAND)
 	cp $(OUT) ../bin/
 	
 clean:

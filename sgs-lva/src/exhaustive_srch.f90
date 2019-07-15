@@ -1,6 +1,6 @@
 module srch
   use global
-  implicit none
+!  implicit none
 
 contains 
 
@@ -18,6 +18,9 @@ contains
     integer                        :: idxin, correltime, i,j,k,ind,tyty(1),largest
     real*8         :: results_temp(nn),d,largest_d 
     logical        ::          skip
+    
+    real               :: vecin_tmp(dim),ds
+
 
    !do an exhaustive search
    
@@ -34,7 +37,10 @@ contains
       ind = ex_sim_array(i)
       if(ind == -999) exit !(we are done now)   
       
-
+      !vecin_tmp =coord_ISOMAP(ind,1:dim)-vecin 
+      !ds = SNRM2(dim,vecin_tmp,1)
+      !d = dble(ds)
+      !d = d*d
       d= dble( sum( ( coord_ISOMAP(ind,1:dim)-vecin ) **2    ))
       
       if(d<largest_d) then  !if d==0.0 then we are at a simualtion location and skip

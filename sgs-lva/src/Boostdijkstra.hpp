@@ -14,4 +14,4 @@
 //
 //void foo_speaker(std::string s);
 //void dijkstra(std::string s);
-void dijkstra_cpp(int* n,int* a, int* b, int* c, double* d);
+void dijkstra_cpp(int* n,int* a, int* b, int* c, double* d, int* e, int* f, double* g);

@@ -392,6 +392,7 @@ deallocate(grid)
     
 end subroutine set_graph
 
+!subroutine set_graph_onlymem(MDS_opt,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array,NODES2CAL_LENGTH,nodes2cal_array)
 subroutine set_graph_onlymem(MDS_opt,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array)
     !initializes the graph, determines nodes and links between nodes
     !if there is enough memory a template array is used to speed up
@@ -429,9 +430,11 @@ subroutine set_graph_onlymem(MDS_opt,NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_
 
     integer, intent(inout) :: NODES_LENGTH
     integer, intent(inout) :: GRID_OUT_LENGTH
+    !integer, intent(inout) :: NODES2CAL_LENGTH
     integer, allocatable, intent(inout) :: cur_edge_node_array1(:)
     integer, allocatable, intent(inout) :: cur_edge_node_array2(:)
     real*8, allocatable, intent(inout) :: edge_dist_array(:)
+    !integer, allocatable, intent(inout) :: nodes2cal_array(:)
 
 
    !make some temprary files

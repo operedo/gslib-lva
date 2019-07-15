@@ -22,7 +22,7 @@ extern "C" {
 //void foo_speaker(const char* s);
 
 //void dijkstra(const char* s);
-void dijkstra(int* n, int* a, int* b, int* c, double* d);
+void dijkstra(int* n, int* a, int* b, int* c, double* d, int* e, int* f, double* g);
 
 #ifdef __cplusplus
 }
