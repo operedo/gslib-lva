@@ -19,11 +19,11 @@ lva_field_v6_360_10_1.dat      -file containing the locally varying anisotropy g
 120   -1.0  0.0166666    -nx,xmn,xsiz
 120   -1.0  0.0166666    -ny,ymn,ysiz
 120   0.0  0.0083333    -nz,zmn,zsiz
-2                  -noffsets for graph (number of offsets described below, see NOTE2)
+1                  -noffsets for graph (number of offsets described below, see NOTE2)
 2                  -use MDS? 2=L-ISOMAP 3=read dist from  grid_cpp.out  and use L-ISOMAP (see NOTE3)
 10 10 10            -number of landmark points in x,y,z (evenly spaced grid nodes) set to nx,ny,nz for classical MDS (landmark point on each cell)
 -1                 -max number of dimensions to use (set -1 to use max, see NOTE4)
-2 12                  -min, max nodes for simulation
+2 24                  -min, max nodes for simulation
 300                   -maximum search radii (a 1D isotropic distance in q dimensions)
 -1                    -maximum number of dimensions to use in search (-1 uses all dimensions see NOTE5)
 1     0               -0=SK,1=OK, simple kriging mean
