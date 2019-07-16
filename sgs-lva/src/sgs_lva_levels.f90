@@ -1007,7 +1007,11 @@ koption=0
     real*8, allocatable :: edge_dist_array(:)
     integer, allocatable :: nodes2cal_array(:)
 
-
+!levels code
+    integer :: numberOfLevels,maxLevel,levelThreshold,countLev,lastCount,lev
+    integer, allocatable :: level(:), ncloseIndex(:), resultsIdxIndex(:,:),indexSort(:),levelCount(:),levelStart(:)
+    real*8, allocatable :: resultsDisIndex(:,:)
+!levels code end
 
  
     allocate(results(ndmax))
@@ -1277,13 +1281,29 @@ koption=0
 !Write(*,*) 'setting arrays and variables for simulation',sum_time
     elapsed=secnds(total)
     write(*,'(f10.4,a)')      elapsed, 's - time to setting arrays and variables for simulation'
-    
+
+
+!levels code
+    allocate(level(nloop))
+    allocate(ncloseIndex(nloop))
+    nclose = min(nd,ndmax)
+    allocate(resultsDisIndex(nclose,nloop))
+    allocate(resultsIdxIndex(nclose,nloop))
+    allocate(indexSort(nloop))
+
+    do i=1,nloop
+        level(i) = 0
+    end do
+!levels code end
+
+
     write(*,*)
     write(*,*) 'Working on the simulation '
     
 !    start_time=secnds(0.0)
     do index2=1,nloop
 !    do index2=1,10001
+
 
       if((int(index2/irepo)*irepo).eq.index2) then
          write(*,103) index2
@@ -1328,7 +1348,15 @@ koption=0
 
             index = ix + (iy-1)*nx + (iz-1) * nx*ny 
       end if
-      
+
+!levels code
+      if(sim(index,1).eq.-999) then
+              level(index)=0
+      end if
+!levels code end
+
+
+
       !get the close data in an array 'results'
       nclose = min(nd,ndmax)
      
@@ -1382,6 +1410,39 @@ koption=0
             nclose=nclose-1
          end if
       end do
+
+!levels code
+      maxLevel=-1
+      
+      do i=1,min(nd,ndmax)
+         if(results(i).dis>radsqd) then
+                 if(level(results(i).idx).gt.maxLevel) then
+                         maxLevel = level(results(i).idx)
+                 end if
+         end if
+      end do
+      if(nclose.eq.0)then
+              level(index)=0
+      write(*,*) 'nclose==0 ',index,level(index)
+              ncloseIndex(index)=0
+              !resultsDisIndex(:,index)=-1
+              !resultsIdxIndex(:,index)=-1
+      else
+              level(index)=maxLevel+1
+      write(*,*) 'nclose!=0 ',index,level(index)
+              ncloseIndex(index)=nclose
+              do i=1,min(nd,ndmax)
+                  resultsDisIndex(i,index)=results(i).dis
+              end do
+              do i=1,min(nd,ndmax)
+                  resultsIdxIndex(i,index)=results(i).idx
+              end do
+      end if
+      write(*,*) index,level(index)
+      if (maxLevel .gt. numberOfLevels) then
+              numberOfLevels = maxLevel
+      end if
+!levels code end
 
 !      !how many eqns for kriging?
 !      neq=nclose
@@ -1513,7 +1574,37 @@ koption=0
 ! END OF MAIN KRIGING LOOP:
 !
  1    continue
- 
+
+!levels code
+       levelThreshold = 0
+       numberOfLevels = numberOfLevels + 1
+       countLev = 0
+       lastCount = 0
+       allocate(levelCount(numberOfLevels+1))
+       allocate(levelStart(numberOfLevels+1))
+
+       do lev = 0,numberOfLevels
+          levelStart(lev+1) = countLev + 1
+          levelCount(lev+1) = 0 
+          do i = 1,nloop
+             if(level(i).eq.lev)then
+                countLev = countLev +1
+                indexSort(countLev) = i
+                levelCount(lev+1) = levelCount(lev+1) + 1
+             end if
+          end do
+          levelThreshold = levelThreshold + levelCount(lev+1)
+
+       end do
+
+!       levelThreshold = int(0.1*ceiling(real(levelThreshold)/
+!     +                           real(numberOfLevels-1)))
+
+!levels code end
+
+
+
+
  !need to draw from the gaussian distribution with this est and var:  (est,estv)
 
 !      if(nclose<ndmin .or. nclose == 0) then

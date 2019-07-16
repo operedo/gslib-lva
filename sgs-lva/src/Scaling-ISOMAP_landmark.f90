@@ -113,6 +113,7 @@ subroutine get_landmark_pts_onlymem(ndmax,nd,nx,ny,nz,NODES_LENGTH,GRID_OUT_LENG
     !write(*,*) size(cur_edge_node_array1(:)),size(cur_edge_node_array2(:)),size(edge_dist_array(:)) 
     !write(*,*) coord_ISOMAP(1,1),coord_ISOMAP(2,1),coord_ISOMAP(1,19),coord_ISOMAP(2,19),coord_ISOMAP(1,23),coord_ISOMAP(2,23)  
     call dijkstra(NODES_LENGTH,GRID_OUT_LENGTH,cur_edge_node_array1,cur_edge_node_array2,edge_dist_array,xyzland,landpts,coord_ISOMAP)
+
     !write(*,*) coord_ISOMAP(1,1),coord_ISOMAP(2,1),coord_ISOMAP(1,19),coord_ISOMAP(2,19),coord_ISOMAP(1,23),coord_ISOMAP(2,23)  
 !stop
 

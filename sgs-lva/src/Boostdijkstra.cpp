@@ -22,6 +22,12 @@
 #include <omp.h>
 #endif
 
+#ifdef _MPI
+#include <mpi.h>
+#endif
+
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+
 using namespace std; 
 using namespace boost;
 
@@ -49,8 +55,16 @@ using namespace boost;
 //     cout << s << endl;
 //}
 
-
-//void dijkstra(string s) 
+//
+////void dijkstra(string s) 
+//void dijkstra_cpp_mpi(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_array1, int* cur_edge_node_array2, double* edge_dist_array, int* NODES2CAL_LENGTH, int* nodes2cal_array, double* coord_ISOMAP) 
+//{
+//    cout << "Begin distributed dijkstra" << endl;
+//    ierr = MPI_Init ( &argc, &argv );
+//
+//
+//}
+//
 void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_array1, int* cur_edge_node_array2, double* edge_dist_array, int* NODES2CAL_LENGTH, int* nodes2cal_array, double* coord_ISOMAP) 
 { 
     cout << "Begin dijkstra" << endl;
@@ -227,16 +241,25 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 
     cout << "time for one path:  " << float(diff_time)/float(nodes2cal) <<  " s" << endl ;
     cout << "done dijkstra"; 
-    outfile.close();
+    //outfile.close();
 
 #else
     //now need to be able to write out the distances
 
-    int num_threads=1;
+    int num_threads=0;
     int this_thread=0;
-#pragma omp parallel
+    //cout << omp_get_max_threads() << endl;;
+    //omp_set_num_threads(16);
+#pragma omp parallel default(none) firstprivate(this_thread) shared(num_threads,cout)
 {
-    num_threads = omp_get_num_threads();
+    //this_thread = omp_get_thread_num();
+    //num_threads = omp_get_num_threads();
+    #pragma omp critical
+    {
+    	this_thread=num_threads;
+        cout << this_thread << " " << num_threads << endl;
+    	num_threads++;
+    }
 }
 
     //cout << num_threads << endl; 
@@ -258,10 +281,22 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
     diff_time=0;
     start_time = time(NULL);
 
+    this_thread=0;
+    num_threads=0;
 #pragma omp parallel default(none) firstprivate(this_thread,stringout,cur_node,p,d) \
                                    shared(num_nodes,num_threads,nodes2cal,cout,cur_node_array,g,coord_ISOMAP,NODES_LENGTH)
 {
-    this_thread = omp_get_thread_num();
+    //this_thread = omp_get_thread_num();
+    //num_threads = omp_get_num_threads();
+    #pragma omp critical
+    {
+    	this_thread=num_threads;
+        cout << this_thread << " " << num_threads << endl;
+    	num_threads++;
+    }
+    
+    #pragma omp barrier
+
     char num2str[21];
 
 //    if(num_threads>1000){
@@ -283,9 +318,14 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 //    ofstream outfile;
 //    outfile.open(stringoutLocal.c_str());
 
-#pragma omp for nowait
-    for (int i=0; i<nodes2cal; ++i) 
+//#pragma omp for nowait
+    int ichunk=int((nodes2cal-num_threads+1)/num_threads)+1; 
+    int imin=this_thread*ichunk;
+    int imax=MIN((this_thread+1)*ichunk,nodes2cal);
+    //for (int i=0; i<nodes2cal; ++i) 
+    for (int i=imin; i<imax; ++i) 
     {
+        if(this_thread==0){cout << "NODE: " << i << "/" << ichunk << " (approx)" << endl;}
 
 //#pragma omp critical 
 //{

@@ -3,30 +3,29 @@
 #FFLAGS= -g -traceback -m32 -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
-FFLAGS= -mkl -openmp -O3 -mtune=native -march=native 
-#FFLAGS= -fopenmp -O3 -mtune=native -march=native 
-#CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
+#FFLAGS= -mkl -openmp -O3 -mtune=native -march=native 
+MKLROOT=/Soft/intelf/composer_xe_2013.3.163/mkl
+MKLFLAGS= -fdefault-integer-8 -I$(MKLROOT)/include/intel64/ilp64 -m64 -I${MKLROOT}/include
+FFLAGS= $(MKLFLAGS) -fopenmp -O3 -mtune=native -march=native 
 CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
-#CCFLAGS = -openmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
 
-#LDFLAGS = -lstdc++ 
-LDFLAGS = -lstdc++ -lgomp
-#LDFLAGS= -lstdc++ -L/Soft/gcc/6.2.0/lib64/ -lgomp
-#LDFLAGS = -lstdc++ /Soft/intelcc/11.1-0.72/lib/intel64/libiomp5.so
+LDFLAGS = -lstdc++ -lmpi_cxx -lgomp
 #LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/ia32/libiomp5.a
 #LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a
-LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a $(LDFLAGS)
-#LINKS=$(LDFLAGS)
+#MKLLINKS= ${MKLROOT}/lib/intel64/libmkl_blas95_ilp64.a ${MKLROOT}/lib/intel64/libmkl_lapack95_ilp64.a -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_gf_ilp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl
+#LINKS=/Soft/intelf/composer_xe_2013.3.163/compiler/lib/intel64/libiomp5.a $(LDFLAGS)
+MKLLINKS= $(MKLROOT)/lib/intel64/libmkl_blas95_ilp64.a $(MKLROOT)/lib/intel64/libmkl_lapack95_ilp64.a -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_gf_ilp64.a $(MKLROOT)/lib/intel64/libmkl_gnu_thread.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -lgomp -lpthread -lm -ldl
+LINKS=$(MKLLINKS) $(LDFLAGS)
 
 #FFLAGS=  -O3 -xSSE4.2
 #FC=ifort
-FC=/Soft/intelf/composer_xe_2013.3.163/bin/intel64/ifort
+#FC=/Soft/intelf/composer_xe_2013.3.163/bin/intel64/ifort
+FC=mpifort.mpich
 #FC=/Soft/intelf/composer_xe_2013.3.163/bin/ia32/ifort
-#FC=/Soft/gcc/6.2.0/bin/gfortran
+#FC=gfortran
 #F90=quicksort.f90  glb.f90  grid_info.f90 class_laf.f90 graph_subs.f90 sqdist.f90 GAMV_LVA.f90 Scaling\ -\ ISOMAP_landmark.f90
-CXX=/Soft/gcc/6.2.0/bin/g++
-#CXX=g++
-#CXX=/Soft/intelcc/11.1-0.72/bin/intel64/icpc
+#CXX = g++
+CXX=mpicxx.mpich
 
 KIND_OBJS=  
 F90_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva.o Scaling-ISOMAP_landmark.o
@@ -165,7 +164,7 @@ ALL_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_OBJS)
 ALL_LEVELS_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_LEVELS_OBJS)
 ALL_OPTLAND_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_OPTLAND_OBJS)
 OUT=SGS_LVA
-OUT_LEVELS=SGS_LVA_levels
+OUT_LEVELS=SGS_LVA_levels_mpi
 OUT_OPTLAND=SGS_LVA_optland
 
 #Scaling-ISOMAP_landmark.o : boostdijkstra_mod.o
