@@ -1007,7 +1007,7 @@ koption=0
     real*8, allocatable :: edge_dist_array(:)
     integer, allocatable :: nodes2cal_array(:)
 
-
+    integer debug_id
 
  
     allocate(results(ndmax))
@@ -1271,7 +1271,12 @@ koption=0
     
     write(*,*)
     write(*,*) 'Working on the simulation '
-    
+
+    !debug_id=856888 
+    !debug_id=59543
+    debug_id=97658
+
+    !write(*,*) 'sim bef',sim 
     do index2=1,nloop
 
       if((int(index2/irepo)*irepo).eq.index2) then
@@ -1294,6 +1299,7 @@ koption=0
             yloc = ymn + real(iy-1)*ysiz
             zloc = zmn + real(iz-1)*zsiz
             !write(*,*)index2,index,ix,iy,iz,xloc,yloc,zloc
+            !stop
       else
         !make cross validation
             !write(*,*)'koption.ne.0'
@@ -1373,6 +1379,8 @@ koption=0
 
       !how many eqns for kriging?
       neq=nclose
+      if(index.eq.debug_id) write(*,*)'nclose ',nclose
+      if(index.eq.debug_id) write(*,*)'dim ',dim
       if(ktype==1) neq=neq+1
       !
       ! Initialize the main kriging matrix:
@@ -1382,11 +1390,13 @@ koption=0
       !
 
       !need to calculate the covariances:
+      if(index.eq.debug_id) write(*,*)'bef ',a
       do i=1,nclose
          ind1=results(i).idx
          do j=i,nclose
             ind2=results(j).idx
             dist=sqrt ( sum( ( coord_ISOMAP(ind1,1:dim)-coord_ISOMAP(ind2,1:dim) ) **2    )    )
+            if(index.eq.debug_id) write(*,*)'dist ',i,j,ind1,ind2,dist
             call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,a(neq*(i-1)+j)) 
             a(neq*(j-1)+i) = a(neq*(i-1)+j)
          end do
@@ -1400,6 +1410,7 @@ koption=0
             a(neq*nclose+i)       = dble(cmax)
          end do
       endif
+      if(index.eq.debug_id) write(*,*)'aft ',a
       !
       ! Fill in the RHS kriging matrix (r):
       !
@@ -1408,6 +1419,7 @@ koption=0
           !cal the distance first then the covariance
           ind1 = results(i).idx
           vra(i,:)=sim(ind1,:) 
+          if(index.eq.debug_id) write(*,*)'ind1 ',nclose,ind1,i,sim(ind1,:),vra(i,:)
           if(d_tree/=dim) then
               dist=results(i).dis + sum( ( coord_ISOMAP(ind1,d_tree+1:dim)-coord_ISOMAP(index,d_tree+1:dim) ) **2    ) !dist in tree is only for the first few dims
           else
@@ -1419,9 +1431,11 @@ koption=0
       !
       ! Copy the right hand side to compute the kriging variance later:
       !
+      if(index.eq.debug_id) write(*,*)'bef ',rr
       do k=1,neq
             rr(k) = r(k)
       end do
+      if(index.eq.debug_id) write(*,*)'aft ',rr
       kadim = neq * neq
       ksdim = neq
       nrhs  = 1
@@ -1445,6 +1459,9 @@ koption=0
       ! Solve the kriging system:
       !
       if(nclose>0 ) call ktsol(neq,nrhs,nv,a,r,s,ising,MAXEQ)
+      if(index.eq.debug_id) write(*,*)'s   ',s
+      if(index.eq.debug_id) write(*,*)'ising',ising,neq,nrhs,MAXEQ,ndmin,cmax,skmean,UNEST
+      if(index.eq.debug_id) write(*,*)'vra   ',vra
 
       ! Compute the solution:
       if(nclose == 1 ) then
@@ -1470,6 +1487,7 @@ koption=0
                                   est(:) = est(:) + real(s(j))*(vra(j,:)-skmean)
                             else
                                   est(:) = est(:) + real(s(j))*vra(j,:)
+                                  if(index.eq.debug_id) write(*,*)'est ',est
                             endif
                       endif
             end do
@@ -1496,6 +1514,8 @@ koption=0
                   write(ldbg,*) '  estimate, variance  ',est,estv
             endif
       endif
+      if(index.eq.debug_id) write(*,*)'est   ',est
+      !if(index.eq.debug_id) stop
 
 !
 ! END OF MAIN KRIGING LOOP:
@@ -1518,7 +1538,9 @@ koption=0
          pp = grnd()
          call gauinv(pp,xpp,ierr)
          sim(index,ireal) = xpp * estv + est(ireal)
+         if(index.eq.debug_id) write(*,*)'sim   ',sim(index,ireal),xpp,estv,est(ireal),pp,ierr
       end do
+      !if(index.eq.debug_id) stop
 
       end do
  2    continue
@@ -1545,6 +1567,12 @@ koption=0
 !
 ! All finished the kriging:
 !
+      do index2=1,nloop
+         index = order(index2)
+         write(*,*) sim(index,1)
+      end do
+
+
       do i=1,nreal
          write(lout,'(f10.4)') sim(:,i)
       end do

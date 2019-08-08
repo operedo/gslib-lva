@@ -94,7 +94,7 @@ module class_lvaf2
         !Incrementally refine L and find the minimum anisotropic distance.
         j = 2
         allocate(L1(2,3), stat = test1)
-        if(test1) call out_of_mem ( 'min_dsqrd _1' )
+        !if(test1) call out_of_mem ( 'min_dsqrd _1' )
         L1(1,:) = a ; L1(2,:) = b
         i = 0
         do while ( i <= n .and. D - Dn > eps )
@@ -102,7 +102,7 @@ module class_lvaf2
             j = j * 2 - 1   !Calculate # of control-points
             !Refine L2 from L1 (add mid-points)
             allocate(L2(j,3), stat = test1)
-            if(test1) call out_of_mem ( 'min_dsqrd _2' )
+            !if(test1) call out_of_mem ( 'min_dsqrd _2' )
             do k = 1, j, 2 !Fill L2 with L1 and interpolated points
                 L2(k,:) = L1((k + 1) / 2,:)
                 if(k < j - 1)then
@@ -114,7 +114,7 @@ module class_lvaf2
             if(i == 1) D0 = D
             !Replace L1 with L2 and continue refining
             allocate(L1(j,3), stat = test1)
-            if(test1) call out_of_mem ( 'min_dsqrd _3' )
+            !if(test1) call out_of_mem ( 'min_dsqrd _3' )
             L1 = L2
             deallocate(L2)
         enddo
@@ -139,7 +139,7 @@ module class_lvaf2
         
         !Initialization
         allocate(nsl( n ), stat = test1)
-        if(test1) call out_of_mem ( 'min_dsqrd  _1' )
+        !if(test1) call out_of_mem ( 'min_dsqrd  _1' )
         D = 0.0
 
         !Enter the Newton method process
@@ -232,7 +232,7 @@ module class_lvaf2
         if(associated(tempverts)) deallocate(tempverts)
         if(associated(tempids))   deallocate(tempids)
         allocate(tempverts(nsa,3), tempids(nsa-1,3), stat = test1)
-        if(test1) call out_of_mem ( 'segment_lineset  _1' )
+        !if(test1) call out_of_mem ( 'segment_lineset  _1' )
         
         !For each segment, calculate the intersection(s) and
         !add them to a new line segment
@@ -269,7 +269,7 @@ module class_lvaf2
         if(allocated(bsl)) deallocate(bsl)
         
         allocate(dsl(nsa-1,3), bsl(nsa-1,3), stat = test1)
-        if(test1) call out_of_mem ( 'segment_lineset  _2' )
+        !if(test1) call out_of_mem ( 'segment_lineset  _2' )
         dsl = tempverts(2:nsa,:) - tempverts(1:nsa-1,:)
         bsl = tempids
         deallocate(tempverts, tempids)
@@ -313,7 +313,7 @@ module class_lvaf2
         !Include the endpoints ( + 2 )
         ns = sum(abs(ida - idb)) + 2
         allocate(t(ns), stat = test1)
-        if(test1) call out_of_mem ( 'split_line  _1' )
+        !if(test1) call out_of_mem ( 'split_line  _1' )
         
         !calculate values in t along each coordinate.  Add location 0 to the
         !start and location 1 to the end.  If line endpoints match a plane
@@ -357,7 +357,7 @@ module class_lvaf2
         if(associated(xps)) deallocate(xps)
         if(associated(ids)) deallocate(ids)
         allocate(xps(ns,3), ids(ns-1,3), stat = test1)
-        if(test1) call out_of_mem ( 'split_line  _2' )
+        !if(test1) call out_of_mem ( 'split_line  _2' )
         
         !Calculate intersections and block indexes
         do i = 1, ns

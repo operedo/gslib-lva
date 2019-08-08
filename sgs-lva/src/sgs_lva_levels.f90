@@ -1009,10 +1009,14 @@ koption=0
 
 !levels code
     integer :: numberOfLevels,maxLevel,levelThreshold,countLev,lastCount,lev
-    integer, allocatable :: level(:), ncloseIndex(:), resultsIdxIndex(:,:),indexSort(:),levelCount(:),levelStart(:)
-    real*8, allocatable :: resultsDisIndex(:,:)
+    integer, allocatable :: level(:), ncloseIndex(:), resultsIdxIndex(:,:),indexSort(:),levelCount(:),levelStart(:),lock(:)
+    real*8, allocatable :: resultsDisIndex(:,:),xppIndex(:,:)
+    integer :: levIni, levFin, levIniLocal, levFinLocal, ilock
+    integer :: threadId,numThreads,blocknumber
+    real :: invNumThreads
+    INTEGER, EXTERNAL :: OMP_GET_THREAD_NUM, OMP_GET_NUM_THREADS
 !levels code end
-
+    integer debug_id
  
     allocate(results(ndmax))
 
@@ -1260,7 +1264,7 @@ koption=0
     
     allocate(est(nreal) )
     sim=-999  !reset the sim array
-    
+
     do ireal=1,nreal
        sim(data_ind(1:nd),ireal) = vr(1:nd)
     end do
@@ -1289,21 +1293,40 @@ koption=0
     nclose = min(nd,ndmax)
     allocate(resultsDisIndex(nclose,nloop))
     allocate(resultsIdxIndex(nclose,nloop))
+    allocate(xppIndex(nloop,nreal))
     allocate(indexSort(nloop))
+    allocate(lock(nloop))
 
     do i=1,nloop
-        level(i) = 0
+        level(i) = -1
     end do
-!levels code end
+    level(data_ind(1:nd))=0
+    numberOfLevels=0
+    lock=0 
 
+    lock(data_ind(1:nd)) = 1
+
+ !levels code end
+
+!!$omp parallel default(firstprivate) private(threadId,numThreads,invNumThreads)
+!      threadId=omp_get_thread_num()+1
+!      numThreads = omp_get_num_threads()
+!      invNumThreads = 1.0/real(numThreads)
+!
+!      write(*,*),threadId,numThreads,invNumThreads
+!!$omp end parallel
+!stop
 
     write(*,*)
     write(*,*) 'Working on the simulation '
     
+    !debug_id=856888 
+    !debug_id=59543
+    debug_id=97658
+
 !    start_time=secnds(0.0)
     do index2=1,nloop
 !    do index2=1,10001
-
 
       if((int(index2/irepo)*irepo).eq.index2) then
          write(*,103) index2
@@ -1324,6 +1347,7 @@ koption=0
             yloc = ymn + real(iy-1)*ysiz
             zloc = zmn + real(iz-1)*zsiz
             !write(*,*)index2,index,ix,iy,iz,xloc,yloc,zloc
+            !if(index2.eq.279) stop
       else
         !make cross validation
             !write(*,*)'koption.ne.0'
@@ -1348,11 +1372,12 @@ koption=0
 
             index = ix + (iy-1)*nx + (iz-1) * nx*ny 
       end if
+!      write(*,*)'Iteration ',index2,' node ',index
 
 !levels code
-      if(sim(index,1).eq.-999) then
-              level(index)=0
-      end if
+!      if(sim(index,1).eq.-999) then
+!              level(index)=0
+!      end if
 !levels code end
 
 
@@ -1391,8 +1416,12 @@ koption=0
          call kdtree2_n_nearest_around_point(real(coord_ISOMAP(index,1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
          !write(*,*) 'calculating neighbours (kdtree) for node ',index 
       else
+         !if(index2.lt.100)then
          call exhaustive_srch(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
-         
+         !else
+         !call exhaustive_srch_omp(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
+         !stop
+         !end if
          !fill the results array:
 
          
@@ -1404,18 +1433,25 @@ koption=0
       end if
       tree%REARRANGED_IS_USABLE(useablemap(index)) = .true.  !need to tell the tree that this point is now simulated:
 
+
+      if(level(index).eq.0)then
+          cycle
+      end if
+
       !do we need to trim out some of the points found?
       do i=1,min(nd,ndmax)
          if(results(i).dis>radsqd) then
             nclose=nclose-1
          end if
       end do
+!      write(*,*) index,' ',nclose,' ',results(:).idx
+!      write(*,*) index,' ',nclose,' ',results(:).dis
 
 !levels code
       maxLevel=-1
       
       do i=1,min(nd,ndmax)
-         if(results(i).dis>radsqd) then
+         if(results(i).dis<=radsqd) then
                  if(level(results(i).idx).gt.maxLevel) then
                          maxLevel = level(results(i).idx)
                  end if
@@ -1423,13 +1459,13 @@ koption=0
       end do
       if(nclose.eq.0)then
               level(index)=0
-      write(*,*) 'nclose==0 ',index,level(index)
+!      write(*,*) 'nclose==0 ',index,level(index)
               ncloseIndex(index)=0
               !resultsDisIndex(:,index)=-1
               !resultsIdxIndex(:,index)=-1
       else
               level(index)=maxLevel+1
-      write(*,*) 'nclose!=0 ',index,level(index)
+!      write(*,*) 'nclose!=0 ',index,level(index)
               ncloseIndex(index)=nclose
               do i=1,min(nd,ndmax)
                   resultsDisIndex(i,index)=results(i).dis
@@ -1438,7 +1474,7 @@ koption=0
                   resultsIdxIndex(i,index)=results(i).idx
               end do
       end if
-      write(*,*) index,level(index)
+      !write(*,*) index,level(index)
       if (maxLevel .gt. numberOfLevels) then
               numberOfLevels = maxLevel
       end if
@@ -1453,201 +1489,324 @@ koption=0
 !      !
 !      ! Fill in the LHS kriging matrix:
 !      !
-!
-!      !need to calculate the covariances:
-!      do i=1,nclose
-!         ind1=results(i).idx
-!         do j=i,nclose
-!            ind2=results(j).idx
-!            dist=sqrt ( sum( ( coord_ISOMAP(ind1,1:dim)-coord_ISOMAP(ind2,1:dim) ) **2    )    )
-!            call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,a(neq*(i-1)+j)) 
-!            a(neq*(j-1)+i) = a(neq*(i-1)+j)
-!         end do
-!      end do
-!      !
-!      ! Fill in the OK unbiasedness portion of the matrix (if not doing SK):
-!      !
-!      if(ktype==1) then
-!         do i=1,nclose
-!            a(neq*(i-1)+nclose+1) = dble(cmax)
-!            a(neq*nclose+i)       = dble(cmax)
-!         end do
-!      endif
-!      !
-!      ! Fill in the RHS kriging matrix (r):
-!      !
-!      r=cmax !so that if we are doing OK the last term is set to 1 (sum of weights=1)
-!      do i=1,nclose
-!          !cal the distance first then the covariance
-!          ind1 = results(i).idx
-!          vra(i,:)=sim(ind1,:) 
-!          if(d_tree/=dim) then
-!              dist=results(i).dis + sum( ( coord_ISOMAP(ind1,d_tree+1:dim)-coord_ISOMAP(index,d_tree+1:dim) ) **2    ) !dist in tree is only for the first few dims
-!          else
-!              dist=results(i).dis 
-!          end if
-!          dist=sqrt(dist)
-!          call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,r(i)) 
-!      end do
-!      !
-!      ! Copy the right hand side to compute the kriging variance later:
-!      !
-!      do k=1,neq
-!            rr(k) = r(k)
-!      end do
-!      kadim = neq * neq
-!      ksdim = neq
-!      nrhs  = 1
-!      nv    = 1
-!!
-!! Write out the kriging Matrix if Seriously Debugging:
-!!
-!      if(idbg.eq.3) then
-!            write(ldbg,*) 'Estimating node index : ',ix,iy,iz
-!            is = 1 - neq
-!            do i=1,neq
-!                  is = 1 + (i-1)*neq
-!                  ie = is + neq - 1
-!                  write(ldbg,100) i,r(i),(a(j),j=is,ie)
-! 100              format('    r(',i2,') =',f7.4,'  a= ',9(10f7.4))
-!            end do
-!      endif
-!      
-!      estv=-999
-!      !
-!      ! Solve the kriging system:
-!      !
-!      if(nclose>0 ) call ktsol(neq,nrhs,nv,a,r,s,ising,MAXEQ)
-!
-!      ! Compute the solution:
-!      if(nclose == 1 ) then
-!         ising=0
-!         s(1) = r(1) ;
-!      end if
-!      if(ising.ne.0) then
-!            if(idbg.ge.3) write(ldbg,*) ' Singular Matrix ',ix,iy,iz
-!            est  = UNEST
-!            estv = UNEST
-!      else if(nclose<ndmin) then
-!            if(idbg.ge.3) write(ldbg,*) ' not enough data to estimate '
-!            est  = UNEST
-!            estv = UNEST
-!      else
-!            est  = 0.0
-!            estv = real(cmax)
-!            do j=1,neq   
-!            
-!                      estv = estv - real(s(j))*rr(j)
-!                      if(j.le.nclose) then
-!                            if(ktype.eq.0) then
-!                                  est(:) = est(:) + real(s(j))*(vra(j,:)-skmean)
-!                            else
-!                                  est(:) = est(:) + real(s(j))*vra(j,:)
-!                            endif
-!                      endif
-!            end do
-!            if(ktype.eq.0.or.ktype.eq.2) est = est + skmean
-!            nk   = nk + 1
-!
-!            !
-!            ! Write the kriging weights and data if debugging level is above 2:
-!            !
-!            if(idbg.ge.2) then
-!                  write(ldbg,*) '       '
-!                  write(ldbg,*) 'BLOCK: ',ix,iy,iz,' at ',xloc,yloc,zloc
-!                  write(ldbg,*) '       '
-!                  if(ktype.ne.0)  &
-!                  write(ldbg,*) '  Lagrange : ',s(na+1)*unbias
-!                  write(ldbg,*) '  BLOCK EST: x,y,z,vr,wt '
-!                  do i=1,na
-!                        xa(i) = xa(i) + xloc - 0.5*xsiz
-!                        ya(i) = ya(i) + yloc - 0.5*ysiz
-!                        za(i) = za(i) + zloc - 0.5*zsiz
-!                        write(ldbg,'(50f12.3)') xa(i),ya(i),za(i), &
-!                                              vra(i,:),s(i)
-!                  end do
-!                  write(ldbg,*) '  estimate, variance  ',est,estv
-!            endif
-!      endif
-
+!      ...
 !
 ! END OF MAIN KRIGING LOOP:
 !
+
+
+      do ireal=1,nreal
+         pp = grnd()
+         call gauinv(pp,xpp,ierr)
+         !sim(index,ireal) = xpp * estv + est(ireal)
+         xppIndex(index,ireal) = xpp
+         !if(index.eq.debug_id) write(*,*)'sim   ',sim(index,ireal),xpp,estv,est(ireal),pp,ierr
+         sim(index,ireal) = 1.0
+      end do
+      end do
  1    continue
 
 !levels code
-       levelThreshold = 0
-       numberOfLevels = numberOfLevels + 1
-       countLev = 0
-       lastCount = 0
-       allocate(levelCount(numberOfLevels+1))
-       allocate(levelStart(numberOfLevels+1))
-
-       do lev = 0,numberOfLevels
-          levelStart(lev+1) = countLev + 1
-          levelCount(lev+1) = 0 
-          do i = 1,nloop
-             if(level(i).eq.lev)then
-                countLev = countLev +1
-                indexSort(countLev) = i
-                levelCount(lev+1) = levelCount(lev+1) + 1
-             end if
-          end do
-          levelThreshold = levelThreshold + levelCount(lev+1)
-
-       end do
-
-!       levelThreshold = int(0.1*ceiling(real(levelThreshold)/
-!     +                           real(numberOfLevels-1)))
-
-!levels code end
+      sim=-999  !reset the sim array
+      do ireal=1,nreal
+         sim(data_ind(1:nd),ireal) = vr(1:nd)
+      end do
 
 
+      levelThreshold = 0
+      numberOfLevels = numberOfLevels + 1
+      countLev = 0
+      lastCount = 0
+      allocate(levelCount(numberOfLevels+1))
+      allocate(levelStart(numberOfLevels+1))
 
-
- !need to draw from the gaussian distribution with this est and var:  (est,estv)
-
-!      if(nclose<ndmin .or. nclose == 0) then
-!         est = 0.0  !the global mean
-!         estv = 1.0
-!      end if
-!      
-!      !if (abs(estv) <= 1e-10 ) estv = 0.0
-!      if (abs(estv) <= 1e-7 ) estv = 0.0
-!
-!      estv=sqrt(estv)     
-!               
-!      do ireal=1,nreal
-!         pp = grnd()
-!         call gauinv(pp,xpp,ierr)
-!         sim(index,ireal) = xpp * estv + est(ireal)
-!      end do
+      do lev = 0,numberOfLevels
+         levelStart(lev+1) = countLev + 1
+         levelCount(lev+1) = 0 
+         do i = 1,nloop
+            if(level(i).eq.lev)then
+               countLev = countLev +1
+               indexSort(countLev) = i
+               levelCount(lev+1) = levelCount(lev+1) + 1
+            end if
+         end do
+         levelThreshold = levelThreshold + levelCount(lev+1)
 
       end do
+
+      lev=0
+      levIni=levelStart(lev+1)
+      levFin=(levelStart(lev+1)+levelCount(lev+1)-1)
+
+      write(*,*) 'level=',lev,' ',(levelCount(1))
+!!$omp parallel default(firstprivate) shared(numberOfLevels,levelStart,levelCount,nclose,coord_ISOMAP,dim,nst,MAXNST,c0,it,cc,aa,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex) private(threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,neq,a,ktype,i,j,ind1,ind2,dis)
+!!$omp parallel default(firstprivate) shared(numberOfLevels,levelStart,levelCount,nclose,coord_ISOMAP,dim,nst,c0,it,cc,aa,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex) private(threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,neq,a,ktype,i,j,ind1,ind2,dist)
+!$omp parallel default(firstprivate) shared(numberOfLevels,levelStart,levelCount,coord_ISOMAP,indexSort,dim,nst,c0,it,cc,aa,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex,sim,d_tree,skmean,seedd,nreal,ktype,ndmin,xppIndex,lock) private(threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,nclose,neq,a,i,j,ind1,ind2,dist,r,vra,rr,k,kadim,ksdim,nrhs,nv,estv,est,ising,s,nk,rand_num,ireal,pp,xpp,ierr,ilock)
+      threadId=omp_get_thread_num()+1
+      numThreads = omp_get_num_threads()
+      invNumThreads = 1.0/real(numThreads)
+
+
+      !if(threadId.eq.1) write(*,*) 'sim bef',sim 
+      !!$omp barrier
+
+      !write(*,*),threadId,numThreads,invNumThreads
+
+      call init_genrand(seedd+threadId*2+1)  !intial the random generator
+      do i=1,10000
+         rand_num = grnd()
+      end do
+ 
+      do lev=1,(numberOfLevels)
+         levIni=levelStart(lev+1) 
+         levFin=(levelStart(lev+1)+levelCount(lev+1)-1) 
+         !write(*,*) 'threadId=',threadId,' level=',lev,' ',(levelCount(lev+1))
+
+         if(numThreads.gt.1)then
+             if(levelCount(lev+1).gt.(2*numThreads)) then
+             blocknumber =ceiling(real(levelCount(lev+1)-numThreads+1)*invNumThreads)
+             levIniLocal = levIni+blocknumber*(threadId-1)
+             levFinLocal = levIni+blocknumber*threadId-1
+             if(threadId.eq.numThreads) levFinLocal=levFin
+             else
+             if(threadId.eq.numThreads) then
+                 levIniLocal = levIni 
+                 levFinLocal=levFin
+             else
+                 levIniLocal = 0 
+                 levFinLocal = -1
+             end if
+             
+             end if
+         else
+             levIniLocal=levIni
+             levFinLocal=levFin
+         end if
+
+         !!$omp critical
+         !write(*,*)lev,threadId,blocknumber,levIniLocal,levFinLocal
+         !!$omp end critical
+
+         do countLev=levIniLocal,levFinLocal
+            index = indexSort(countLev)
+            !!$omp critical
+            !write(*,*) index,' ',lev
+            !!$omp end critical
+
+   
+            !how many eqns for kriging?
+            nclose=ncloseIndex(index) 
+            if(index.eq.debug_id) write(*,*)'nclose ',nclose
+            if(index.eq.debug_id) write(*,*)'dim ',dim
+            neq=nclose
+            if(ktype==1) neq=neq+1
+            !
+            ! Initialize the main kriging matrix:
+            a = 0.0
+            !
+            ! Fill in the LHS kriging matrix:
+            !
+
+            !need to calculate the covariances:
+            if(index.eq.debug_id) write(*,*)'bef ',a
+            do i=1,nclose
+               ind1=resultsIdxIndex(i,index)
+               do j=i,nclose
+                  ind2=resultsIdxIndex(j,index)
+                  dist=sqrt ( sum( ( coord_ISOMAP(ind1,1:dim)-coord_ISOMAP(ind2,1:dim) ) **2    )    )
+                  if(index.eq.debug_id) write(*,*)'dist ',i,j,ind1,ind2,dist
+                  call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,a(neq*(i-1)+j)) 
+                  a(neq*(j-1)+i) = a(neq*(i-1)+j)
+               end do
+            end do
+
+            
+            ! Fill in the OK unbiasedness portion of the matrix (if not doing SK):
+            !
+            if(ktype==1) then
+               do i=1,nclose
+                  a(neq*(i-1)+nclose+1) = dble(cmax)
+                  a(neq*nclose+i)       = dble(cmax)
+               end do
+            endif
+
+            if(index.eq.debug_id) write(*,*)'aft ',a
+
+
+            ilock=0
+            do while(ilock.eq.0)
+               ilock=1
+               do i=1,nclose
+                  ilock=ilock*lock(resultsIdxIndex(i,index))
+               end do
+            end do
+
+
+            !
+            ! Fill in the RHS kriging matrix (r):
+            !
+            r=cmax !so that if we are doing OK the last term is set to 1 (sum of weights=1)
+            do i=1,nclose
+                !cal the distance first then the covariance
+                ind1 = resultsIdxIndex(i,index)
+                vra(i,:)=sim(ind1,:) 
+                if(index.eq.debug_id) write(*,*)'ind1 ',nclose,ind1,i,sim(ind1,:),vra(i,:)
+                if(d_tree/=dim) then
+                    dist=resultsDisIndex(i,index) + sum( ( coord_ISOMAP(ind1,d_tree+1:dim)-coord_ISOMAP(index,d_tree+1:dim) ) **2    ) !dist in tree is only for the first few dims
+                else
+                    dist=resultsDisIndex(i,index)
+                end if
+                dist=sqrt(dist)
+                call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,r(i)) 
+            end do
+            !
+            ! Copy the right hand side to compute the kriging variance later:
+            !
+            if(index.eq.debug_id) write(*,*)'bef ',rr
+            do k=1,neq
+                  rr(k) = r(k)
+            end do
+            if(index.eq.debug_id) write(*,*)'aft ',rr
+            kadim = neq * neq
+            ksdim = neq
+            nrhs  = 1
+            nv    = 1
+
+            !
+            ! Write out the kriging Matrix if Seriously Debugging:
+            !
+!            if(idbg.eq.3) then
+!                  write(ldbg,*) 'Estimating node index : ',ix,iy,iz
+!                  is = 1 - neq
+!                  do i=1,neq
+!                        is = 1 + (i-1)*neq
+!                        ie = is + neq - 1
+!                        write(ldbg,100) i,r(i),(a(j),j=is,ie)
+! 100                    format('    r(',i2,') =',f7.4,'  a= ',9(10f7.4))
+!                  end do
+!            endif
+                  
+            estv=-999
+            !
+            ! Solve the kriging system:
+            !
+            if(nclose>0 ) call ktsol(neq,nrhs,nv,a,r,s,ising,MAXEQ)
+            if(index.eq.debug_id) write(*,*)'s   ',s
+            if(index.eq.debug_id) write(*,*)'ising',ising,neq,nrhs,MAXEQ,ndmin,cmax,skmean,UNEST
+            if(index.eq.debug_id) write(*,*)'vra   ',vra
+            
+            ! Compute the solution:
+            if(nclose == 1 ) then
+               ising=0
+               s(1) = r(1) ;
+            end if
+            if(ising.ne.0) then
+                  !if(idbg.ge.3) write(ldbg,*) ' Singular Matrix ',ix,iy,iz
+                  est  = UNEST
+                  estv = UNEST
+            else if(nclose<ndmin) then
+                  !if(idbg.ge.3) write(ldbg,*) ' not enough data to estimate '
+                  est  = UNEST
+                  estv = UNEST
+            else
+                  est  = 0.0
+                  estv = real(cmax)
+                  do j=1,neq   
+                  
+                            estv = estv - real(s(j))*rr(j)
+                            if(j.le.nclose) then
+                                  if(ktype.eq.0) then
+                                        est(:) = est(:) + real(s(j))*(vra(j,:)-skmean)
+                                  else
+                                        est(:) = est(:) + real(s(j))*vra(j,:)
+                                        if(index.eq.debug_id) write(*,*)'est ',est
+                                  endif
+                            endif
+                  end do
+                  if(ktype.eq.0.or.ktype.eq.2) est = est + skmean
+                  nk   = nk + 1
+            
+                  !
+                  ! Write the kriging weights and data if debugging level is above 2:
+                  !
+                  !if(idbg.ge.2) then
+                  !      write(ldbg,*) '       '
+                  !      write(ldbg,*) 'BLOCK: ',ix,iy,iz,' at ',xloc,yloc,zloc
+                  !      write(ldbg,*) '       '
+                  !      if(ktype.ne.0)  &
+                  !      write(ldbg,*) '  Lagrange : ',s(na+1)*unbias
+                  !      write(ldbg,*) '  BLOCK EST: x,y,z,vr,wt '
+                  !      do i=1,na
+                  !            xa(i) = xa(i) + xloc - 0.5*xsiz
+                  !            ya(i) = ya(i) + yloc - 0.5*ysiz
+                  !            za(i) = za(i) + zloc - 0.5*zsiz
+                  !            write(ldbg,'(50f12.3)') xa(i),ya(i),za(i), &
+                  !                                  vra(i,:),s(i)
+                  !      end do
+                  !      write(ldbg,*) '  estimate, variance  ',est,estv
+                  !endif
+            endif
+
+            if(index.eq.debug_id) write(*,*)'est   ',est
+            !if(index.eq.debug_id) stop
+!
+! END OF MAIN KRIGING LOOP:
+!   
+   
+!levels code end
+
+            !need to draw from the gaussian distribution with this est and var:  (est,estv)
+
+            if(nclose<ndmin .or. nclose == 0) then
+               est = 0.0  !the global mean
+               estv = 1.0
+            end if
+            
+            !if (abs(estv) <= 1e-10 ) estv = 0.0
+            if (abs(estv) <= 1e-7 ) estv = 0.0
+
+            estv=sqrt(estv)     
+                     
+            do ireal=1,nreal
+               !pp = grnd()
+               !call gauinv(pp,xpp,ierr)
+               sim(index,ireal) = xppIndex(index,ireal) * estv + est(ireal)
+               if(index.eq.debug_id) write(*,*)'sim   ',sim(index,ireal),xpp,estv,est(ireal),pp,ierr
+            end do
+            lock(index) = 1
+
+         end do
+      end do
+!$omp end parallel
  2    continue
       if(koption.gt.0) close(ljack)
 !    sum_time = secnds(start_time)
 !Write(*,*) 'simulating points',sum_time
     elapsed=secnds(total)
     write(*,'(f10.4,a)')      elapsed, 's - time of simulation'
-!
-! Write statistics of kriged values:
-!
- 
-      if(nk.gt.0.and.idbg.gt.0) then
-            xk    = xk/real(nk)
-            vk    = vk/real(nk) - xk*xk
-            xkmae = xkmae/real(nk)
-            xkmse = xkmse/real(nk)
-            write(ldbg,105) nk,xk,vk
-            write(*,   105) nk,xk,vk
- 105        format(/,'Estimated   ',i8,' blocks ',/, &
-                    '  average   ',g14.8,/,'  variance  ',g14.8,/)
-            if(koption.ne.0) then
-                  write(*,106) xkmae,xkmse
- 106              format(/,'  mean error',g14.8,/,'  mean sqd e',g14.8)
-            end if
-      endif
+
+    do index2=1,nloop
+       index = order(index2)
+       write(*,*) sim(index,1)
+    end do
+!!
+!! Write statistics of kriged values:
+!!
+! 
+!      if(nk.gt.0.and.idbg.gt.0) then
+!            xk    = xk/real(nk)
+!            vk    = vk/real(nk) - xk*xk
+!            xkmae = xkmae/real(nk)
+!            xkmse = xkmse/real(nk)
+!            write(ldbg,105) nk,xk,vk
+!            write(*,   105) nk,xk,vk
+! 105        format(/,'Estimated   ',i8,' blocks ',/, &
+!                    '  average   ',g14.8,/,'  variance  ',g14.8,/)
+!            if(koption.ne.0) then
+!                  write(*,106) xkmae,xkmse
+! 106              format(/,'  mean error',g14.8,/,'  mean sqd e',g14.8)
+!            end if
+!      endif
 
 !
 ! All finished the kriging:

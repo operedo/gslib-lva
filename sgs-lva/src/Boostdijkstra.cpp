@@ -177,7 +177,6 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
     //instream >> nodes2cal;
 
     nodes2cal = *NODES2CAL_LENGTH;
-
     cout << "working out distances to ";cout << nodes2cal; cout << " nodes"; cout << endl; 
     //cout << "NODE:"; cout << endl; 
 

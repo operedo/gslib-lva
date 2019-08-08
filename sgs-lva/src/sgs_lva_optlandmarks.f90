@@ -1009,7 +1009,7 @@ koption=0
 
     real :: rndtest
     real*8 :: sumdiff, sumdiffsq, maxdiff, mindiff
-    integer :: STATS_SAMPLE
+    integer :: STATS_SAMPLE,d_tree_i
  
     allocate(results(ndmax))
 
@@ -1196,14 +1196,14 @@ koption=0
         maxdiff=-1000000000.0
         mindiff= 1000000000.0
         do i=1,STATS_SAMPLE
-           temp_order(i,2)=sqrt ( sum( ( coord_ISOMAP(order(nxyz-i),1:dim)-coord_ISOMAP(order(nxyz-i-1),1:dim) ) **2    )    )
+           temp_order(i,2)=sqrt ( sum( ( coord_ISOMAP(order(nxyz-i),1:d_tree)-coord_ISOMAP(order(nxyz-i-1),1:d_tree) ) **2    )    )
            !write(*,*) order(nxyz-i),order(nxyz-i-1),temp_order(i,2)   
            sumdiff = sumdiff + temp_order(i,2)/temp_order(i,1)
            !sumdiffsq = sumdiffsq + (temp_order(i,2)/temp_order(i,1))*(temp_order(i,2)/temp_order(i,1)) 
            maxdiff = MAX(maxdiff,temp_order(i,2)/temp_order(i,1))
            mindiff = MIN(mindiff,temp_order(i,2)/temp_order(i,1))
         end do
-        write(*,*) 'STATS: ',STATS_SAMPLE,NODES2CAL_LENGTH,(sumdiff/STATS_SAMPLE),mindiff,maxdiff
+        write(*,*) 'STATS: ',STATS_SAMPLE,d_tree,NODES2CAL_LENGTH,(sumdiff/STATS_SAMPLE),mindiff,maxdiff
 
         end do
 

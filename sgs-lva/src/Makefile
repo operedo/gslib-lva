@@ -3,10 +3,10 @@
 #FFLAGS= -g -traceback -m32 -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
-FFLAGS= -mkl -openmp -O3 -mtune=native -march=native 
+FFLAGS= -g -mkl -openmp -O3 -mtune=native -march=native 
 #FFLAGS= -fopenmp -O3 -mtune=native -march=native 
 #CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
-CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
+CCFLAGS = -g -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
 #CCFLAGS = -openmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
 
 #LDFLAGS = -lstdc++ 
@@ -173,14 +173,16 @@ OUT_OPTLAND=SGS_LVA_optland
 default: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OBJS) -o $(OUT)
 	cp $(OUT) ../bin/
+	cp $(OUT) ../test/swiss-roll/
 
 levels: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_LEVELS_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_LEVELS_OBJS) -o $(OUT_LEVELS)
-	cp $(OUT) ../bin/
+	cp $(OUT_LEVELS) ../bin/
+	cp $(OUT_LEVELS) ../test/swiss-roll/
 
 optland: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OPTLAND_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OPTLAND_OBJS) -o $(OUT_OPTLAND)
-	cp $(OUT) ../bin/
+	cp $(OUT_OPTLAND) ../bin/
 	
 clean:
 	rm *.mod *.o $(OUT) ../bin/$(OUT)
