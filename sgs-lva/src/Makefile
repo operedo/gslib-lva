@@ -3,7 +3,7 @@
 #FFLAGS= -g -traceback -m32 -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
 #FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
-FFLAGS= -g -mkl -openmp -O3 -mtune=native -march=native 
+FFLAGS= -DDEBUG -mkl -openmp -O3 -mtune=native -march=native 
 #FFLAGS= -fopenmp -O3 -mtune=native -march=native 
 #CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
 CCFLAGS = -g -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 

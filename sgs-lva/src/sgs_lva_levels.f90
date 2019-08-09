@@ -1298,9 +1298,9 @@ koption=0
     allocate(lock(nloop))
 
     do i=1,nloop
-        level(i) = -1
+        level(i) = 0
     end do
-    level(data_ind(1:nd))=0
+    !level(data_ind(1:nd))=0
     numberOfLevels=0
     lock=0 
 
@@ -1308,21 +1308,17 @@ koption=0
 
  !levels code end
 
-!!$omp parallel default(firstprivate) private(threadId,numThreads,invNumThreads)
-!      threadId=omp_get_thread_num()+1
-!      numThreads = omp_get_num_threads()
-!      invNumThreads = 1.0/real(numThreads)
-!
-!      write(*,*),threadId,numThreads,invNumThreads
-!!$omp end parallel
-!stop
-
     write(*,*)
     write(*,*) 'Working on the simulation '
-    
+
+#ifdef DEBUG    
     !debug_id=856888 
     !debug_id=59543
-    debug_id=97658
+    !debug_id=97658
+    !debug_id=1010784
+    debug_id=1584421
+    !debug_id=470047
+#endif
 
 !    start_time=secnds(0.0)
     do index2=1,nloop
@@ -1347,7 +1343,7 @@ koption=0
             yloc = ymn + real(iy-1)*ysiz
             zloc = zmn + real(iz-1)*zsiz
             !write(*,*)index2,index,ix,iy,iz,xloc,yloc,zloc
-            !if(index2.eq.279) stop
+            !if(index2.eq.51121) stop
       else
         !make cross validation
             !write(*,*)'koption.ne.0'
@@ -1375,9 +1371,10 @@ koption=0
 !      write(*,*)'Iteration ',index2,' node ',index
 
 !levels code
-!      if(sim(index,1).eq.-999) then
-!              level(index)=0
-!      end if
+      if(sim(index,1).ne.-999)then
+          level(index)=0
+          go to 50
+      end if
 !levels code end
 
 
@@ -1434,9 +1431,9 @@ koption=0
       tree%REARRANGED_IS_USABLE(useablemap(index)) = .true.  !need to tell the tree that this point is now simulated:
 
 
-      if(level(index).eq.0)then
-          cycle
-      end if
+      !if(level(index).eq.0)then
+      !    cycle
+      !end if
 
       !do we need to trim out some of the points found?
       do i=1,min(nd,ndmax)
@@ -1458,14 +1455,13 @@ koption=0
          end if
       end do
       if(nclose.eq.0)then
+#ifdef DEBUG    
+              write(*,*) 'ERROR nclose.eq.0'
+#endif
               level(index)=0
-!      write(*,*) 'nclose==0 ',index,level(index)
               ncloseIndex(index)=0
-              !resultsDisIndex(:,index)=-1
-              !resultsIdxIndex(:,index)=-1
       else
               level(index)=maxLevel+1
-!      write(*,*) 'nclose!=0 ',index,level(index)
               ncloseIndex(index)=nclose
               do i=1,min(nd,ndmax)
                   resultsDisIndex(i,index)=results(i).dis
@@ -1474,7 +1470,6 @@ koption=0
                   resultsIdxIndex(i,index)=results(i).idx
               end do
       end if
-      !write(*,*) index,level(index)
       if (maxLevel .gt. numberOfLevels) then
               numberOfLevels = maxLevel
       end if
@@ -1495,6 +1490,7 @@ koption=0
 !
 
 
+ 50   continue
       do ireal=1,nreal
          pp = grnd()
          call gauinv(pp,xpp,ierr)
@@ -1538,9 +1534,10 @@ koption=0
       levIni=levelStart(lev+1)
       levFin=(levelStart(lev+1)+levelCount(lev+1)-1)
 
+#ifdef DEBUG    
       write(*,*) 'level=',lev,' ',(levelCount(1))
-!!$omp parallel default(firstprivate) shared(numberOfLevels,levelStart,levelCount,nclose,coord_ISOMAP,dim,nst,MAXNST,c0,it,cc,aa,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex) private(threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,neq,a,ktype,i,j,ind1,ind2,dis)
-!!$omp parallel default(firstprivate) shared(numberOfLevels,levelStart,levelCount,nclose,coord_ISOMAP,dim,nst,c0,it,cc,aa,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex) private(threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,neq,a,ktype,i,j,ind1,ind2,dist)
+#endif
+
 !$omp parallel default(firstprivate) shared(numberOfLevels,levelStart,levelCount,coord_ISOMAP,indexSort,dim,nst,c0,it,cc,aa,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex,sim,d_tree,skmean,seedd,nreal,ktype,ndmin,xppIndex,lock) private(threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,nclose,neq,a,i,j,ind1,ind2,dist,r,vra,rr,k,kadim,ksdim,nrhs,nv,estv,est,ising,s,nk,rand_num,ireal,pp,xpp,ierr,ilock)
       threadId=omp_get_thread_num()+1
       numThreads = omp_get_num_threads()
@@ -1596,8 +1593,10 @@ koption=0
    
             !how many eqns for kriging?
             nclose=ncloseIndex(index) 
+#ifdef DEBUG    
             if(index.eq.debug_id) write(*,*)'nclose ',nclose
             if(index.eq.debug_id) write(*,*)'dim ',dim
+#endif
             neq=nclose
             if(ktype==1) neq=neq+1
             !
@@ -1608,13 +1607,17 @@ koption=0
             !
 
             !need to calculate the covariances:
+#ifdef DEBUG    
             if(index.eq.debug_id) write(*,*)'bef ',a
+#endif
             do i=1,nclose
                ind1=resultsIdxIndex(i,index)
                do j=i,nclose
                   ind2=resultsIdxIndex(j,index)
                   dist=sqrt ( sum( ( coord_ISOMAP(ind1,1:dim)-coord_ISOMAP(ind2,1:dim) ) **2    )    )
+#ifdef DEBUG    
                   if(index.eq.debug_id) write(*,*)'dist ',i,j,ind1,ind2,dist
+#endif
                   call cova3_1D(dist,1,nst,MAXNST,c0,it,cc,aa,cmax,a(neq*(i-1)+j)) 
                   a(neq*(j-1)+i) = a(neq*(i-1)+j)
                end do
@@ -1630,7 +1633,9 @@ koption=0
                end do
             endif
 
+#ifdef DEBUG    
             if(index.eq.debug_id) write(*,*)'aft ',a
+#endif
 
 
             ilock=0
@@ -1650,7 +1655,9 @@ koption=0
                 !cal the distance first then the covariance
                 ind1 = resultsIdxIndex(i,index)
                 vra(i,:)=sim(ind1,:) 
+#ifdef DEBUG    
                 if(index.eq.debug_id) write(*,*)'ind1 ',nclose,ind1,i,sim(ind1,:),vra(i,:)
+#endif
                 if(d_tree/=dim) then
                     dist=resultsDisIndex(i,index) + sum( ( coord_ISOMAP(ind1,d_tree+1:dim)-coord_ISOMAP(index,d_tree+1:dim) ) **2    ) !dist in tree is only for the first few dims
                 else
@@ -1662,11 +1669,15 @@ koption=0
             !
             ! Copy the right hand side to compute the kriging variance later:
             !
+#ifdef DEBUG    
             if(index.eq.debug_id) write(*,*)'bef ',rr
+#endif
             do k=1,neq
                   rr(k) = r(k)
             end do
+#ifdef DEBUG    
             if(index.eq.debug_id) write(*,*)'aft ',rr
+#endif
             kadim = neq * neq
             ksdim = neq
             nrhs  = 1
@@ -1691,9 +1702,11 @@ koption=0
             ! Solve the kriging system:
             !
             if(nclose>0 ) call ktsol(neq,nrhs,nv,a,r,s,ising,MAXEQ)
+#ifdef DEBUG    
             if(index.eq.debug_id) write(*,*)'s   ',s
             if(index.eq.debug_id) write(*,*)'ising',ising,neq,nrhs,MAXEQ,ndmin,cmax,skmean,UNEST
             if(index.eq.debug_id) write(*,*)'vra   ',vra
+#endif
             
             ! Compute the solution:
             if(nclose == 1 ) then
@@ -1719,7 +1732,9 @@ koption=0
                                         est(:) = est(:) + real(s(j))*(vra(j,:)-skmean)
                                   else
                                         est(:) = est(:) + real(s(j))*vra(j,:)
+#ifdef DEBUG    
                                         if(index.eq.debug_id) write(*,*)'est ',est
+#endif
                                   endif
                             endif
                   end do
@@ -1747,8 +1762,10 @@ koption=0
                   !endif
             endif
 
+#ifdef DEBUG    
             if(index.eq.debug_id) write(*,*)'est   ',est
             !if(index.eq.debug_id) stop
+#endif
 !
 ! END OF MAIN KRIGING LOOP:
 !   
@@ -1771,7 +1788,9 @@ koption=0
                !pp = grnd()
                !call gauinv(pp,xpp,ierr)
                sim(index,ireal) = xppIndex(index,ireal) * estv + est(ireal)
-               if(index.eq.debug_id) write(*,*)'sim   ',sim(index,ireal),xpp,estv,est(ireal),pp,ierr
+#ifdef DEBUG    
+               if(index.eq.debug_id) write(*,*)'sim   ',sim(index,ireal),xppIndex(index,ireal),estv,est(ireal),pp,ierr
+#endif
             end do
             lock(index) = 1
 
@@ -1785,10 +1804,13 @@ koption=0
     elapsed=secnds(total)
     write(*,'(f10.4,a)')      elapsed, 's - time of simulation'
 
+#ifdef DEBUG    
     do index2=1,nloop
        index = order(index2)
        write(*,*) sim(index,1)
     end do
+#endif
+
 !!
 !! Write statistics of kriged values:
 !!

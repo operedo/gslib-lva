@@ -67,10 +67,10 @@ using namespace boost;
 //
 void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_array1, int* cur_edge_node_array2, double* edge_dist_array, int* NODES2CAL_LENGTH, int* nodes2cal_array, double* coord_ISOMAP) 
 { 
-    cout << "Begin dijkstra" << endl;
+    cout << " [CPP] Begin dijkstra" << endl;
 
 //    cout << *NODES_LENGTH <<" " << *GRID_OUT_LENGTH << " " << *(cur_edge_node_array1+0) << " " <<  *(cur_edge_node_array2+0) << " " << *(edge_dist_array) << endl;
-    cout << *(coord_ISOMAP+0) << " "<< *(coord_ISOMAP+1) << " " << *(coord_ISOMAP+*NODES_LENGTH) << endl;
+    //cout << *(coord_ISOMAP+0) << " "<< *(coord_ISOMAP+1) << " " << *(coord_ISOMAP+*NODES_LENGTH) << endl;
 
 //     start the timer
     time_t start_time, end_time;
@@ -112,8 +112,8 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
     int num_arcs = num_edges;
     int n1,n2;
 
-    cout << "READING graph into C++ program from file grid.out";  cout << endl;cout << endl;  cout << endl;
-    cout << "Found ";cout << num_nodes; cout << " nodes, and "; cout << num_edges; cout << " edges";cout  << endl; 
+    cout << " [CPP] Loading graph";  cout << endl;cout << endl;  cout << endl;
+    cout << " [CPP] Found ";cout << num_nodes; cout << " nodes, and "; cout << num_edges; cout << " edges";cout  << endl; 
 
     for (int i=0; i<num_edges; ++i) 
     { 
@@ -136,28 +136,28 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 //     _strdate( dateStr1);
 //     _strtime( timeStr1 );
 
-    cout << "graph read in"; cout << endl;  cout << endl; 
-    cout << "setting up dijkstra call for your graph"; cout << endl; 
+    cout << " [CPP] Graph read in"; cout << endl;  cout << endl; 
+    //cout << " [CPP] Setting up Dijkstra call for the graph"; cout << endl; 
 
     graph_t g(edge_array, edge_array + num_arcs, weights, num_nodes);
 
-    cout << "graph_t g created"; cout << endl; 
+    //cout << "graph_t g created"; cout << endl; 
 
     property_map<graph_t, edge_weight_t>::type weightmap = get(edge_weight, g);
 
-    cout << "property_map weightmap created"; cout << endl; 
+    //cout << "property_map weightmap created"; cout << endl; 
 
     std::vector<vertex_descriptor> p(num_vertices(g));
 
-    cout << "vector<vertex_descriptor> p created"; cout << endl; 
+    //cout << "vector<vertex_descriptor> p created"; cout << endl; 
 
     std::vector<float> d(num_vertices(g));
 
-    cout << "vector<float> d created"; cout << endl; 
+    //cout << "vector<float> d created"; cout << endl; 
     
     property_map<graph_t, vertex_index_t>::type indexmap = get(vertex_index, g);
 
-    cout << "property_map indexmap created"; cout << endl; 
+    //cout << "property_map indexmap created"; cout << endl; 
 
 
 
@@ -177,7 +177,7 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
     //instream >> nodes2cal;
 
     nodes2cal = *NODES2CAL_LENGTH;
-    cout << "working out distances to ";cout << nodes2cal; cout << " nodes"; cout << endl; 
+    cout << " [CPP] Working out distances to ";cout << nodes2cal; cout << " nodes"; cout << endl; 
     //cout << "NODE:"; cout << endl; 
 
 
@@ -238,8 +238,8 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
          diff_time=diff_time + end_time-start_time;
     }
 
-    cout << "time for one path:  " << float(diff_time)/float(nodes2cal) <<  " s" << endl ;
-    cout << "done dijkstra"; 
+    cout << " [CPP] Time for one path:  " << float(diff_time)/float(nodes2cal) <<  " s" << endl ;
+    cout << " [CPP] Done dijkstra"; 
     //outfile.close();
 
 #else
@@ -256,7 +256,7 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
     #pragma omp critical
     {
     	this_thread=num_threads;
-        cout << this_thread << " " << num_threads << endl;
+        cout << " [CPP][OMP] this_thread=" << this_thread << " num_threads=" << num_threads << endl;
     	num_threads++;
     }
 }
@@ -290,7 +290,8 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
     #pragma omp critical
     {
     	this_thread=num_threads;
-        cout << this_thread << " " << num_threads << endl;
+        cout << " [CPP][OMP] this_thread=" << this_thread << " num_threads=" << num_threads << endl;
+        //cout << this_thread << " " << num_threads << endl;
     	num_threads++;
     }
     
@@ -324,7 +325,7 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
     //for (int i=0; i<nodes2cal; ++i) 
     for (int i=imin; i<imax; ++i) 
     {
-        if(this_thread==0){cout << "NODE: " << i << "/" << ichunk << " (approx)" << endl;}
+        if(this_thread==0){cout << " [CPP][OMP] Estimated progress: " << i << "/" << ichunk << endl;}
 
 //#pragma omp critical 
 //{
@@ -376,8 +377,8 @@ void dijkstra_cpp(int* NODES_LENGTH, int* GRID_OUT_LENGTH, int* cur_edge_node_ar
 
     end_time=time(NULL);
     diff_time=diff_time + end_time-start_time;
-    cout << "time for one path:  " << float(diff_time)/float(nodes2cal) <<  " s" << endl ;
-    cout << "done dijkstra" << endl; 
+    cout << " [CPP] Time for one path:  " << float(diff_time)/float(nodes2cal) <<  " s" << endl ;
+    cout << " [CPP] Done dijkstra" << endl; 
 
 
 #endif

@@ -1274,7 +1274,10 @@ koption=0
 
     !debug_id=856888 
     !debug_id=59543
-    debug_id=97658
+    !debug_id=97658
+    !debug_id=1010784
+    debug_id=1584421
+    !debug_id=470047
 
     !write(*,*) 'sim bef',sim 
     do index2=1,nloop
