@@ -1,13 +1,15 @@
+
 #FC=gfortran
-#FFLAGS= -freal-8-real-4 -O3
-#FFLAGS= -g -traceback -m32 -heap-arrays=1000 -O3 -mtune=native -march=native
-#FFLAGS= -g -traceback -heap-arrays=1000 -O3 -mtune=native -march=native
-#FFLAGS= -g -pg -openmp -O3 -mtune=native -march=native 
-FFLAGS= -DDEBUG -mkl -openmp -O3 -mtune=native -march=native 
-#FFLAGS= -fopenmp -O3 -mtune=native -march=native 
-#CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
-CCFLAGS = -g -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
-#CCFLAGS = -openmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=1 
+
+#FFLAGS= -fpp -DDEBUG -mkl -openmp -O3 -mtune=native -march=native -opt-report=3 -vec-report=3 
+#CCFLAGS = -g -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=2 
+#FFLAGS= -g -fpp -mkl -openmp -O3 -mtune=native -march=native -opt-report=3 -vec-report=3 
+
+#FFLAGS= -g -traceback -fpp -mkl -openmp -O3 -mtune=native -march=native 
+FFLAGS= -fpp -mkl -openmp -O3 -mtune=native -march=native 
+#CCFLAGS = -dumpmachine -g -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize -ftree-vectorizer-verbose=2 
+#CCFLAGS = -g -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize  
+CCFLAGS = -fopenmp  -mcmodel=medium -Wall -pedantic -Ofast -funroll-loops -finline-functions -ftree-vectorize  
 
 #LDFLAGS = -lstdc++ 
 LDFLAGS = -lstdc++ -lgomp
@@ -31,6 +33,7 @@ CXX=/Soft/gcc/6.2.0/bin/g++
 KIND_OBJS=  
 F90_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva.o Scaling-ISOMAP_landmark.o
 F90_LEVELS_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva_levels.o Scaling-ISOMAP_landmark.o
+F90_LEVELS_SPEC_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva_levels_speculative.o Scaling-ISOMAP_landmark.o
 F90_OPTLAND_OBJS= quicksort.o gauinv.o random.o glb.o  grid_info.o aniso_d.o graph_subs.o kdtree3.o cova_1D.o sortem.o ktsol.o exhaustive_srch.o sgs_lva_optlandmarks.o Scaling-ISOMAP_landmark.o
 #FOR=chknam.for  getindx.for
 FOR_OBJS=chknam.o  getindx.o
@@ -163,9 +166,11 @@ CPP_OBJS= boostdijkstra.o boostdijkstra_capi.o Boostdijkstra.o
 
 ALL_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_OBJS)
 ALL_LEVELS_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_LEVELS_OBJS)
+ALL_LEVELS_SPEC_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_LEVELS_SPEC_OBJS)
 ALL_OPTLAND_OBJS= $(CPP_OBJS) $(FOR_OBJS) $(F90_OPTLAND_OBJS)
 OUT=SGS_LVA
-OUT_LEVELS=SGS_LVA_levels
+OUT_LEVELS=SGS_LVA_levels_opt01
+OUT_LEVELS_SPEC=SGS_LVA_levels_speculative
 OUT_OPTLAND=SGS_LVA_optland
 
 #Scaling-ISOMAP_landmark.o : boostdijkstra_mod.o
@@ -173,21 +178,27 @@ OUT_OPTLAND=SGS_LVA_optland
 default: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OBJS) -o $(OUT)
 	cp $(OUT) ../bin/
-	cp $(OUT) ../test/swiss-roll/
+#	cp $(OUT) ../test/swiss-roll/
 
 levels: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_LEVELS_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_LEVELS_OBJS) -o $(OUT_LEVELS)
 	cp $(OUT_LEVELS) ../bin/
 	cp $(OUT_LEVELS) ../test/swiss-roll/
 
+levels-spec: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_LEVELS_SPEC_OBJS)
+	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_LEVELS_SPEC_OBJS) -o $(OUT_LEVELS_SPEC)
+	cp $(OUT_LEVELS_SPEC) ../bin/
+	cp $(OUT_LEVELS_SPEC) ../test/swiss-roll/
+
+
 optland: $(KIND_OBJS) $(LAPACK_OBJS) $(ALL_OPTLAND_OBJS)
 	$(FC) $(FFLAGS) $(LINKS) $(KIND_OBJS) $(OBJS) $(ALL_OPTLAND_OBJS) -o $(OUT_OPTLAND)
 	cp $(OUT_OPTLAND) ../bin/
-	
+
 clean:
 	rm *.mod *.o $(OUT) ../bin/$(OUT)
 
-.SUFFIXES: .o .F90 .f90 .for .f .cpp
+.SUFFIXES: .o .F90 .f90 .for .f .fpp .cpp
 
 .F90.o : ; $(FC) -c $(FFLAGS) $*.F90
 
@@ -196,6 +207,8 @@ clean:
 .for.o : ; $(FC) -c $(FFLAGS) $*.for
 
 .f.o : ; $(FC) -c $(FFLAGS) $*.f
+
+.fpp.o : ; $(FC) -c $(FFLAGS) $*.fpp
 
 .cpp.o : ; ${CXX} -c ${CCFLAGS} $*.cpp
 

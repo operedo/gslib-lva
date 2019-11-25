@@ -495,6 +495,7 @@ module kdtree2_module
   !---------------------------------------------------------------
   !-------------------SEARCH ROUTINES-----------------------------
   public :: kdtree2_n_nearest,kdtree2_n_nearest_around_point
+  public :: kdtree2_n_nearest_around_point_omp
   ! Return fixed number of nearest neighbors around arbitrary vector,
   ! or extant point in dataset, with decorrelation window. 
   !
@@ -1101,6 +1102,7 @@ contains
 
     allocate (sr%qv(tp%dimen))
     !sr%qv = tp%the_data(:,idxin) ! copy the vector
+    !write(*,*)'reach kdtree 1.0'
     sr%qv = vecin
     sr%ballsize = huge(1.0)       ! the largest real(kdkind) number
     !sr%centeridx = idxin
@@ -1117,6 +1119,7 @@ contains
 
     sr%ind => tp%ind
     sr%rearrange = tp%rearrange
+    !write(*,*)'reach kdtree 2.0'
 
     if (sr%rearrange) then
        sr%Data => tp%rearranged_data
@@ -1125,18 +1128,83 @@ contains
        sr%Data => tp%the_data
        sr%usable => tp%IS_USABLE !***NEW***
     endif
+    !write(*,*)'reach kdtree 3.0'
 
     call validate_query_storage(nn)
+    !write(*,*)'reach kdtree 4.0'
     sr%pq = pq_create(results)
+    !write(*,*)'reach kdtree 5.0'
 
-    call search(tp%root)
+    !call search(tp%root)
+    call search_opt01(tp%root)
+    !write(*,*)'reach kdtree 6.0'
 
     if (tp%sort) then
        call kdtree2_sort_results(nn, results)
     endif
+    !write(*,*)'reach kdtree 7.0'
     deallocate (sr%qv)
     return
   end subroutine kdtree2_n_nearest_around_point
+
+  subroutine kdtree2_n_nearest_around_point_omp(vecin,dim,tp,idxin,correltime,nn,results)
+    ! Find the 'nn' vectors in the tree nearest to point 'idxin',
+    ! with correlation window 'correltime', returing results in
+    ! results(:), which must be pre-allocated upon entry.
+    integer, intent (In)           :: dim
+    real                           :: vecin(dim)
+    type (kdtree2), pointer        :: tp
+    integer, intent (In)           :: idxin, correltime, nn
+    type(kdtree2_result), target   :: results(:)
+    !type(tree_search_record), target :: srl   ! A GLOBAL VARIABLE for search
+
+!    allocate (srl%qv(tp%dimen))
+    !sr%qv = tp%the_data(:,idxin) ! copy the vector
+    write(*,*)'reach kdtree 1.0'
+!    srl%qv = vecin
+!    srl%ballsize = huge(1.0)       ! the largest real(kdkind) number
+!    !sr%centeridx = idxin
+!    srl%centeridx = -1
+!    srl%correltime = correltime
+!
+!    srl%nn = nn
+!    srl%nfound = 0
+!
+!    srl%dimen = tp%dimen
+!    srl%nalloc = nn
+!
+!    srl%results => results
+!
+!    srl%ind => tp%ind
+!    srl%rearrange = tp%rearrange
+!    write(*,*)'reach kdtree 2.0'
+!
+!    if (srl%rearrange) then
+!       srl%Data => tp%rearranged_data
+!       srl%usable => tp%REARRANGED_IS_USABLE !***NEW***
+!    else
+!       srl%Data => tp%the_data
+!       srl%usable => tp%IS_USABLE !***NEW***
+!    endif
+!    write(*,*)'reach kdtree 3.0'
+!
+!    call validate_query_storage_omp(nn,srl)
+!    write(*,*)'reach kdtree 4.0'
+!    srl%pq = pq_create(results)
+!    write(*,*)'reach kdtree 5.0'
+!
+!    !call search(tp%root)
+!    call search_opt01_omp(tp%root)
+!    write(*,*)'reach kdtree 6.0'
+!
+!    if (tp%sort) then
+!       call kdtree2_sort_results(nn, results)
+!    endif
+!    write(*,*)'reach kdtree 7.0'
+!    deallocate (sr%qv)
+    return
+  end subroutine kdtree2_n_nearest_around_point_omp
+
 
   subroutine kdtree2_r_nearest(tp,qv,r2,nfound,nalloc,results) 
     ! find the nearest neighbors to point 'idxin', within SQUARED
@@ -1376,6 +1444,23 @@ contains
     return
   end subroutine validate_query_storage
 
+!  subroutine validate_query_storage_omp(n,srl)
+!    !
+!    ! make sure we have enough storage for n
+!    !
+!    integer, intent(in) :: n
+!    type(tree_search_record), pointer :: srl   ! A GLOBAL VARIABLE for search
+!
+!    if (size(srl%results,1) .lt. n) then
+!       write (*,*) 'KD_TREE_TRANS:  you did not provide enough storage for results(1:n)'
+!       stop
+!       return
+!    endif
+!
+!    return
+!  end subroutine validate_query_storage_omp
+
+
   function square_distance(d, iv,qv) result (res)
     ! distance between iv[1:n] and qv[1:n] 
     ! .. Function Return Value ..
@@ -1416,8 +1501,10 @@ contains
        ! we are on a terminal node
        if (sr%nn .eq. 0) then
           call process_terminal_node_fixedball(node)
+          !call process_terminal_node_fixedball_opt01(node)
        else
           call process_terminal_node(node)
+          !call process_terminal_node_opt01(node)
        endif
     else
        ! we are not on a terminal node
@@ -1468,6 +1555,207 @@ contains
        endif
     end if
   end subroutine search
+
+  recursive subroutine search_opt01(node)
+    !
+    ! This is the innermost core routine of the kd-tree search.  Along
+    ! with "process_terminal_node", it is the performance bottleneck. 
+    !
+    ! This version uses a logically complete secondary search of
+    ! "box in bounds", whether the sear
+    !
+    type (Tree_node), pointer          :: node
+    ! ..
+    type(tree_node),pointer            :: ncloser, nfarther
+    !
+    integer                            :: cut_dim, i
+    ! ..
+    real(kdkind)                               :: qval, dis
+    real(kdkind)                               :: ballsize
+    real(kdkind), pointer           :: qv(:)
+    type(interval), pointer :: box(:) 
+
+    real(kdkind) :: qvi,bui,bli
+
+
+
+    if ((associated(node%left) .and. associated(node%right)) .eqv. .false.) then
+       ! we are on a terminal node
+       if (sr%nn .eq. 0) then
+          !call process_terminal_node_fixedball(node)
+          call process_terminal_node_fixedball_opt01(node)
+       else
+          !call process_terminal_node(node)
+          call process_terminal_node_opt01(node)
+       endif
+    else
+       ! we are not on a terminal node
+       qv => sr%qv(1:)
+       cut_dim = node%cut_dim
+       qval = qv(cut_dim)
+
+       if (qval < node%cut_val) then
+          ncloser => node%left
+          nfarther => node%right
+          dis = (node%cut_val_right - qval)**2
+!          extra = node%cut_val - qval
+       else
+          ncloser => node%right
+          nfarther => node%left
+          dis = (node%cut_val_left - qval)**2
+!          extra = qval- node%cut_val_left
+       endif
+
+       if (associated(ncloser)) call search_opt01(ncloser)
+
+       ! we may need to search the second node. 
+       if (associated(nfarther)) then
+          ballsize = sr%ballsize
+          !write(*,*)'[KDTREE] nfarther'
+!          dis=extra**2
+          if (dis <= ballsize) then
+             !
+             ! we do this separately as going on the first cut dimen is often
+             ! a good idea.
+             ! note that if extra**2 < sr%ballsize, then the next
+             ! check will also be false. 
+             !
+             box => node%box(1:)
+             do i=1,sr%dimen-1
+                !if (i .ne. cut_dim) then
+                   !dis = dis + dis2_from_bnd(qv(i),box(i)%lower,box(i)%upper)
+                   qvi = qv(i)
+                   bui = box(i)%upper
+                   bli = box(i)%lower
+
+                   if (qvi > bui) then
+                      dis = dis + (qvi-bui)**2;
+                   elseif (qvi < bli) then
+                      dis = dis + (bli-qvi)**2;
+                   endif
+
+
+
+
+
+
+                   if (dis > ballsize) then
+                      return
+                   endif
+                !endif
+             end do
+             
+             !
+             ! if we are still here then we need to search mroe.
+             !
+             call search_opt01(nfarther)
+          endif
+       endif
+    end if
+  end subroutine search_opt01
+
+!  recursive subroutine search_opt01_omp(node,srl)
+!    !
+!    ! This is the innermost core routine of the kd-tree search.  Along
+!    ! with "process_terminal_node", it is the performance bottleneck. 
+!    !
+!    ! This version uses a logically complete secondary search of
+!    ! "box in bounds", whether the sear
+!    !
+!    type (Tree_node), pointer          :: node
+!    type(tree_search_record), pointer :: srl   ! A GLOBAL VARIABLE for search
+!    ! ..
+!    type(tree_node),pointer            :: ncloser, nfarther
+!    !
+!    integer                            :: cut_dim, i
+!    ! ..
+!    real(kdkind)                               :: qval, dis
+!    real(kdkind)                               :: ballsize
+!    real(kdkind), pointer           :: qv(:)
+!    type(interval), pointer :: box(:) 
+!
+!    real(kdkind) :: qvi,bui,bli
+!
+!
+!
+!    if ((associated(node%left) .and. associated(node%right)) .eqv. .false.) then
+!       ! we are on a terminal node
+!       if (srl%nn .eq. 0) then
+!          !call process_terminal_node_fixedball(node)
+!          !call process_terminal_node_fixedball_opt01(node)
+!          call process_terminal_node_fixedball_opt01_omp(node)
+!       else
+!          !call process_terminal_node(node)
+!          !call process_terminal_node_opt01(node)
+!          call process_terminal_node_opt01_omp(node)
+!       endif
+!    else
+!       ! we are not on a terminal node
+!       qv => srl%qv(1:)
+!       cut_dim = node%cut_dim
+!       qval = qv(cut_dim)
+!
+!       if (qval < node%cut_val) then
+!          ncloser => node%left
+!          nfarther => node%right
+!          dis = (node%cut_val_right - qval)**2
+!!          extra = node%cut_val - qval
+!       else
+!          ncloser => node%right
+!          nfarther => node%left
+!          dis = (node%cut_val_left - qval)**2
+!!          extra = qval- node%cut_val_left
+!       endif
+!
+!       if (associated(ncloser)) call search_opt01_omp(ncloser,srl)
+!
+!       ! we may need to search the second node. 
+!       if (associated(nfarther)) then
+!          ballsize = srl%ballsize
+!          !write(*,*)'[KDTREE] nfarther'
+!!          dis=extra**2
+!          if (dis <= ballsize) then
+!             !
+!             ! we do this separately as going on the first cut dimen is often
+!             ! a good idea.
+!             ! note that if extra**2 < sr%ballsize, then the next
+!             ! check will also be false. 
+!             !
+!             box => node%box(1:)
+!             do i=1,srl%dimen-1
+!                !if (i .ne. cut_dim) then
+!                   !dis = dis + dis2_from_bnd(qv(i),box(i)%lower,box(i)%upper)
+!                   qvi = qv(i)
+!                   bui = box(i)%upper
+!                   bli = box(i)%lower
+!
+!                   if (qvi > bui) then
+!                      dis = dis + (qvi-bui)**2;
+!                   elseif (qvi < bli) then
+!                      dis = dis + (bli-qvi)**2;
+!                   endif
+!
+!
+!
+!
+!
+!
+!                   if (dis > ballsize) then
+!                      return
+!                   endif
+!                !endif
+!             end do
+!             
+!             !
+!             ! if we are still here then we need to search mroe.
+!             !
+!             call search_opt01_omp(nfarther,srl)
+!          endif
+!       endif
+!    end if
+!  end subroutine search_opt01_omp
+
+
 
 
   real(kdkind) function dis2_from_bnd(x,amin,amax) result (res)
@@ -1629,6 +1917,172 @@ contains
 
   end subroutine process_terminal_node
 
+  subroutine process_terminal_node_opt01(node)
+    !
+    ! Look for actual near neighbors in 'node', and update
+    ! the search results on the sr data structure.
+    !
+    type (tree_node), pointer          :: node
+    !
+    real(kdkind), pointer          :: qv(:)
+    integer, pointer       :: ind(:)
+    real(kdkind), pointer          :: data(:,:)
+    logical, pointer :: usable(:) !***NEW***
+    !
+    integer                :: dimen, i, indexofi, k, centeridx, correltime
+    real(kdkind)                   :: ballsize, sd, newpri
+    logical                :: rearrange
+    type(pq), pointer      :: pqp 
+    integer :: nodel, nodeu
+
+    !
+    ! copy values from sr to local variables
+    !
+    !
+    ! Notice, making local pointers with an EXPLICIT lower bound
+    ! seems to generate faster code.
+    ! why?  I don't know.
+    qv => sr%qv(1:) 
+    pqp => sr%pq
+    dimen = sr%dimen
+    ballsize = sr%ballsize 
+    rearrange = sr%rearrange
+    ind => sr%ind(1:)
+    data => sr%Data(1:,1:)     
+    usable => sr%usable !***NEW***
+    centeridx = sr%centeridx
+    correltime = sr%correltime
+
+
+    nodel=node%l
+    nodeu=node%u
+
+    !    doing_correl = (centeridx >= 0)  ! Do we have a decorrelation window? 
+    !    include_point = .true.    ! by default include all points
+    ! search through terminal bucket.
+
+    if (rearrange) then
+       mainlooprea: do i = nodel, nodeu
+          sd = 0.0
+          do k = 1,dimen
+             sd = sd + (data(k,i) - qv(k))**2
+             if (sd>ballsize) cycle mainlooprea
+          end do
+          indexofi = ind(i)  ! only read it if we have not broken out
+
+          if (centeridx > 0) then ! doing correlation interval?
+          if (abs(indexofi-centeridx) < correltime) cycle mainlooprea
+          endif
+
+       if ( usable(i) ) then !***NEW***
+           ! 
+           ! two choices for any point.  The list so far is either undersized,
+           ! or it is not.
+           !
+           ! If it is undersized, then add the point and its distance
+           ! unconditionally.  If the point added fills up the working
+           ! list then set the sr%ballsize, maximum distance bound (largest distance on
+           ! list) to be that distance, instead of the initialized +infinity. 
+           !
+           ! If the running list is full size, then compute the
+           ! distance but break out immediately if it is larger
+           ! than sr%ballsize, "best squared distance" (of the largest element),
+           ! as it cannot be a good neighbor. 
+           !
+           ! Once computed, compare to best_square distance.
+           ! if it is smaller, then delete the previous largest
+           ! element and add the new one. 
+
+           if (sr%nfound .lt. sr%nn) then
+              !
+              ! add this point unconditionally to fill list.
+              !
+              sr%nfound = sr%nfound +1 
+              newpri = pq_insert(pqp,sd,indexofi)
+              if (sr%nfound .eq. sr%nn) ballsize = newpri
+              ! we have just filled the working list.
+              ! put the best square distance to the maximum value
+              ! on the list, which is extractable from the PQ. 
+
+           else
+              !
+              ! now, if we get here,
+              ! we know that the current node has a squared
+              ! distance smaller than the largest one on the list, and
+              ! belongs on the list. 
+              ! Hence we replace that with the current one.
+              !
+              ballsize = pq_replace_max(pqp,sd,indexofi)
+           endif
+       endif
+    end do mainlooprea
+
+    else
+
+       mainloopnorea: do i = nodel, nodeu
+
+          indexofi = ind(i)
+          sd = 0.0
+          do k = 1,dimen
+             sd = sd + (data(k,indexofi) - qv(k))**2
+             if (sd>ballsize) cycle mainloopnorea
+          end do
+
+       if (centeridx > 0) then ! doing correlation interval?
+          if (abs(indexofi-centeridx) < correltime) cycle mainloopnorea
+       endif
+
+       if ( usable(i) ) then !***NEW***
+           ! 
+           ! two choices for any point.  The list so far is either undersized,
+           ! or it is not.
+           !
+           ! If it is undersized, then add the point and its distance
+           ! unconditionally.  If the point added fills up the working
+           ! list then set the sr%ballsize, maximum distance bound (largest distance on
+           ! list) to be that distance, instead of the initialized +infinity. 
+           !
+           ! If the running list is full size, then compute the
+           ! distance but break out immediately if it is larger
+           ! than sr%ballsize, "best squared distance" (of the largest element),
+           ! as it cannot be a good neighbor. 
+           !
+           ! Once computed, compare to best_square distance.
+           ! if it is smaller, then delete the previous largest
+           ! element and add the new one. 
+
+           if (sr%nfound .lt. sr%nn) then
+              !
+              ! add this point unconditionally to fill list.
+              !
+              sr%nfound = sr%nfound +1 
+              newpri = pq_insert(pqp,sd,indexofi)
+              if (sr%nfound .eq. sr%nn) ballsize = newpri
+              ! we have just filled the working list.
+              ! put the best square distance to the maximum value
+              ! on the list, which is extractable from the PQ. 
+
+           else
+              !
+              ! now, if we get here,
+              ! we know that the current node has a squared
+              ! distance smaller than the largest one on the list, and
+              ! belongs on the list. 
+              ! Hence we replace that with the current one.
+              !
+              ballsize = pq_replace_max(pqp,sd,indexofi)
+           endif
+       endif
+    end do mainloopnorea
+    end if
+    !
+    ! Reset sr variables which may have changed during loop
+    !
+    sr%ballsize = ballsize 
+
+  end subroutine process_terminal_node_opt01
+
+
   subroutine process_terminal_node_fixedball(node)
     !
     ! Look for actual near neighbors in 'node', and update
@@ -1727,6 +2181,150 @@ contains
     !
     sr%nfound = nfound
   end subroutine process_terminal_node_fixedball
+
+  subroutine process_terminal_node_fixedball_opt01(node)
+    !
+    ! Look for actual near neighbors in 'node', and update
+    ! the search results on the sr data structure, i.e.
+    ! save all within a fixed ball.
+    !
+    type (tree_node), pointer          :: node
+    !
+    
+    
+    type(tree_search_record), pointer :: p_sr
+    
+    
+    real(kdkind), pointer          :: qv(:)
+    integer, pointer       :: ind(:)
+    real(kdkind), pointer          :: data(:,:)
+    !
+    integer                :: nfound
+    integer                :: dimen, i, indexofi, k
+    integer                :: centeridx, correltime, nn
+    real(kdkind)                   :: ballsize, sd
+    logical                :: rearrange
+    integer :: nodel, nodeu
+    
+    p_sr => sr
+
+    !
+    ! copy values from sr to local variables
+    !
+    qv => sr%qv(1:)
+    dimen = sr%dimen
+    ballsize = sr%ballsize 
+    rearrange = sr%rearrange
+    ind => sr%ind(1:)
+    data => sr%Data(1:,1:)
+    centeridx = sr%centeridx
+    correltime = sr%correltime
+    nn = sr%nn ! number to search for
+    nfound = sr%nfound
+
+    nodel=node%l
+    nodeu=node%u
+
+    ! search through terminal bucket.
+    if (rearrange) then
+    mainlooprea: do i = nodel, nodeu
+
+       ! 
+       ! two choices for any point.  The list so far is either undersized,
+       ! or it is not.
+       !
+       ! If it is undersized, then add the point and its distance
+       ! unconditionally.  If the point added fills up the working
+       ! list then set the sr%ballsize, maximum distance bound (largest distance on
+       ! list) to be that distance, instead of the initialized +infinity. 
+       !
+       ! If the running list is full size, then compute the
+       ! distance but break out immediately if it is larger
+       ! than sr%ballsize, "best squared distance" (of the largest element),
+       ! as it cannot be a good neighbor. 
+       !
+       ! Once computed, compare to best_square distance.
+       ! if it is smaller, then delete the previous largest
+       ! element and add the new one. 
+
+       ! which index to the point do we use? 
+
+          sd = 0.0
+          do k = 1,dimen
+             sd = sd + (data(k,i) - qv(k))**2
+             if (sd>ballsize) cycle mainlooprea
+          end do
+          indexofi = ind(i)  ! only read it if we have not broken out
+
+       if (centeridx > 0) then ! doing correlation interval?
+          if (abs(indexofi-centeridx)<correltime) cycle mainlooprea
+       endif
+
+       nfound = nfound+1
+       if (nfound .gt. sr%nalloc) then
+          ! oh nuts, we have to add another one to the tree but
+          ! there isn't enough room.
+          sr%overflow = .true.
+       else
+          sr%results(nfound)%dis = sd
+          sr%results(nfound)%idx = indexofi
+       endif
+    end do mainlooprea
+ 
+
+    else
+
+    ! search through terminal bucket.
+    mainloopnorea: do i = nodel, nodeu
+
+       ! 
+       ! two choices for any point.  The list so far is either undersized,
+       ! or it is not.
+       !
+       ! If it is undersized, then add the point and its distance
+       ! unconditionally.  If the point added fills up the working
+       ! list then set the sr%ballsize, maximum distance bound (largest distance on
+       ! list) to be that distance, instead of the initialized +infinity. 
+       !
+       ! If the running list is full size, then compute the
+       ! distance but break out immediately if it is larger
+       ! than sr%ballsize, "best squared distance" (of the largest element),
+       ! as it cannot be a good neighbor. 
+       !
+       ! Once computed, compare to best_square distance.
+       ! if it is smaller, then delete the previous largest
+       ! element and add the new one. 
+
+       ! which index to the point do we use? 
+
+          indexofi = ind(i)
+          sd = 0.0
+          do k = 1,dimen
+             sd = sd + (data(k,indexofi) - qv(k))**2
+             if (sd>ballsize) cycle mainloopnorea
+          end do
+
+       if (centeridx > 0) then ! doing correlation interval?
+          if (abs(indexofi-centeridx)<correltime) cycle mainloopnorea
+       endif
+
+       nfound = nfound+1
+       if (nfound .gt. sr%nalloc) then
+          ! oh nuts, we have to add another one to the tree but
+          ! there isn't enough room.
+          sr%overflow = .true.
+       else
+          sr%results(nfound)%dis = sd
+          sr%results(nfound)%idx = indexofi
+       endif
+    end do mainloopnorea
+    end if
+    !
+    ! Reset sr variables which may have changed during loop
+    !
+    sr%nfound = nfound
+  end subroutine process_terminal_node_fixedball_opt01
+
 
   subroutine kdtree2_n_nearest_brute_force(tp,qv,nn,results) 
     ! find the 'n' nearest neighbors to 'qv' by exhaustive search.

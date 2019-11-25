@@ -1011,6 +1011,9 @@ koption=0
     integer, allocatable :: nodes2cal_array(:)
 
 !levels code
+    integer :: indexarray(40)
+    integer :: reprocessarray(40)
+    integer :: reprocess
     integer :: numberOfLevels,maxLevel,levelThreshold,countLev,lastCount,lev
     integer, allocatable :: level(:), ncloseIndex(:), resultsIdxIndex(:,:),indexSort(:),levelCount(:),levelStart(:)
     integer, allocatable, target :: lock(:)
@@ -1023,7 +1026,19 @@ koption=0
 !levels code end
     integer debug_id
     real*8 :: coord_ISOMAP_vectemp
- 
+!exhaustive_search_omp begin
+    !integer        :: idxin, correltime, i,j,k,ind,tyty(1),largest
+    integer, allocatable :: ex_sim_array_local(:)
+    integer        :: nn,indsearch,tyty(1),largest
+    real*8,allocatable   :: results_tmp(:)
+    real*8         :: d,largest_d 
+    logical        :: skip
+    !real           :: vecin_tmp(dimm),ds
+
+
+!exhaustive_search_omp end
+
+
     allocate(results(ndmax))
     !allocate(coord_ISOMAP_vectemp(dim))
 
@@ -1281,11 +1296,15 @@ koption=0
     allocate(ex_results_d(nclose))
     allocate(ex_results(nclose))
     
+    allocate(ex_sim_array_local(nloop+nd))
     allocate(ex_sim_array(nloop+nd))
     n_searched=0    
     ex_sim_array=-999
     ex_sim_array(1:nd) = data_ind(1:nd)
-    
+    ex_sim_array_local=-999
+    ex_sim_array_local(1:nd) = data_ind(1:nd)
+    !ex_sim_array_local(1:(nloop+nd)) = ex_sim_array(1:(nloop+nd))
+
 !    sum_time = secnds(start_time)
 !Write(*,*) 'setting arrays and variables for simulation',sum_time
     elapsed=secnds(total)
@@ -1303,9 +1322,16 @@ koption=0
     allocate(lock(nloop))
 
     do i=1,nloop
-        level(i) = 0
+        !level(i) = 0
+        level(i) = -1
     end do
-    !level(data_ind(1:nd))=0
+    level(data_ind(1:nd))=0
+
+
+    do i=1,nd
+        write(*,*)'DATA:',data_ind(i)
+    end do
+
     numberOfLevels=0
     lock=0 
 
@@ -1324,214 +1350,418 @@ koption=0
     !debug_id=470047
 #endif
 
+    numThreads=0
+!$omp parallel default(shared)
+    !$omp critical
+    numThreads=numThreads+1
+    !$omp end critical
+    !$omp barrier
+!$omp end parallel
+ 
+    write(*,*)numThreads
+!    numThreads=1
 !    start_time=secnds(0.0)
-    do index2=1,nloop
+
+
+
+
+
+!$omp parallel default(firstprivate) &
+!$omp shared(ex_sim_array,use_kd_tree,indexarray,reprocessarray,tree,useablemap,level,numberOfLevels,levelStart,levelCount,coord_ISOMAP,coord_ISOMAP_trans,indexSort,dim,nst,c0,it,cc,aa,aainv,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex,sim,d_tree,skmean,seedd,nreal,ktype,ndmin,xppIndex,lock) &
+!$omp private(ex_sim_array_local,results,threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,nclose,neq,a,i,j,ind1,ind2,dist,r,vra,rr,k,kadim,ksdim,nrhs,nv,estv,est,ising,s,nk,rand_num,ireal,pp,xpp,ierr,ilock,plock,coord_ISOMAP_vectemp,ex_results_d,largest,largest_d,d,indsearch,skip,nn,results_tmp,tyty)
+!
+    threadId=omp_get_thread_num()+1
+    numThreads = omp_get_num_threads()
+
+
+    do index2=1,nloop,numThreads
+    !do index2=1,32,numThreads
 !    do index2=1,10001
 
-      if((int(index2/irepo)*irepo).eq.index2) then
+#ifdef DEBUG    
+      write(*,*)'index2=',index2
+#endif
+
+
+!      if((int(index2/irepo)*irepo).eq.index2) then
          write(*,103) index2
  103  format('[FOR](sgs)   currently on estimate ',i9)
-      end if      
+!      end if      
+
 
       !
 ! Where are we making an estimate?
 !
+      reprocessarray=0
       if(koption.eq.0) then
 
             !write(*,*)'koption.eq.0'
-
-            index = order(index2)
-            iz   = int((index-1)/nxy) + 1
-            iy   = int((index-(iz-1)*nxy-1)/nx) + 1
-            ix   = index - (iz-1)*nxy - (iy-1)*nx
-            xloc = xmn + real(ix-1)*xsiz
-            yloc = ymn + real(iy-1)*ysiz
-            zloc = zmn + real(iz-1)*zsiz
-            !write(*,*)index2,index,ix,iy,iz,xloc,yloc,zloc
-            !if(index2.eq.51121) stop
+            do j=1,numThreads
+                indexarray(j) = order(index2+j-1)
+#ifdef DEBUG    
+                write(*,*)index2,indexarray(j)
+#endif
+            end do
+            !iz   = int((index-1)/nxy) + 1
+            !iy   = int((index-(iz-1)*nxy-1)/nx) + 1
+            !ix   = index - (iz-1)*nxy - (iy-1)*nx
+            !xloc = xmn + real(ix-1)*xsiz
+            !yloc = ymn + real(iy-1)*ysiz
+            !zloc = zmn + real(iz-1)*zsiz
+            !!write(*,*)index2,index,ix,iy,iz,xloc,yloc,zloc
+            !!if(index2.eq.51121) stop
       else
-        !make cross validation
+            write(*,*)'Cross validation not supported in OpenMP levels speculative version.'
+            !return
+              !make cross validation
             !write(*,*)'koption.ne.0'
-            read(ljack,*,err=96,end=2) (var(i),i=1,nvarij)
-            ddh  = 0.0
-            xloc = xmn
-            yloc = ymn
-            zloc = zmn
-            true = UNEST
-            secj = UNEST
-            if(idhlj.gt.0)  ddh    = var(idhlj)
-            if(ixlj.gt.0)   xloc   = var(ixlj)
-            if(iylj.gt.0)   yloc   = var(iylj)
-            if(izlj.gt.0)   zloc   = var(izlj)
-            if(ivrlj.gt.0)  true   = var(ivrlj)
-            if(iextvj.gt.0) extest = var(iextvj)
-            if(true.lt.tmin.or.true.ge.tmax) true = UNEST
-            !index in now ...
-            call getindx(nx,xmn,xsiz,xloc,ix,inflag)
-            call getindx(ny,ymn,ysiz,yloc,iy,inflag)
-            call getindx(nz,zmn,zsiz,zloc,iz,inflag)
-
-            index = ix + (iy-1)*nx + (iz-1) * nx*ny 
+!            read(ljack,*,err=96,end=2) (var(i),i=1,nvarij)
+!            ddh  = 0.0
+!            xloc = xmn
+!            yloc = ymn
+!            zloc = zmn
+!            true = UNEST
+!            secj = UNEST
+!            if(idhlj.gt.0)  ddh    = var(idhlj)
+!            if(ixlj.gt.0)   xloc   = var(ixlj)
+!            if(iylj.gt.0)   yloc   = var(iylj)
+!            if(izlj.gt.0)   zloc   = var(izlj)
+!            if(ivrlj.gt.0)  true   = var(ivrlj)
+!            if(iextvj.gt.0) extest = var(iextvj)
+!            if(true.lt.tmin.or.true.ge.tmax) true = UNEST
+!            !index in now ...
+!            call getindx(nx,xmn,xsiz,xloc,ix,inflag)
+!            call getindx(ny,ymn,ysiz,yloc,iy,inflag)
+!            call getindx(nz,zmn,zsiz,zloc,iz,inflag)
+!
+!            index = ix + (iy-1)*nx + (iz-1) * nx*ny 
       end if
 !      write(*,*)'Iteration ',index2,' node ',index
 
 !levels code
-      if(sim(index,1).ne.-999)then
-          level(index)=0
-          go to 50
-      end if
-!levels code end
-
-
-
-      !get the close data in an array 'results'
-      nclose = min(nd,ndmax)
-      nclosetmp = nclose
-     
-      !the tree is only efficient if it is fairly full, do 1000 with an exhaustive search and then test tree,
-      !once the tree is efficient only use the tree
-      if(n_searched == 1000 .and. not(use_kd_tree)) then
-              
-!          n_searched=0
-!          time_temp=secnds(real(0.0,4))
-!          do i=1,10
-!          call kdtree2_n_nearest_around_point(real(coord_ISOMAP(index,1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
-!          end do
-!          kd_time=secnds(time_temp)
-!          
-!          
-!          !do exhaustive search to test for time
-!          time_temp=secnds(real(0.0,4))
-!          do i=1,10
-!          call exhaustive_srch(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results, ex_results_d,nd+index2)
-!          end do
-!          exhaustive_srch_time=secnds(time_temp)
-!          
-!          if(kd_time<exhaustive_srch_time) use_kd_tree = .true.  !from now on use the kd tree
-         
-      else
-          n_searched=n_searched+1
-      end if
-     
-     
-      !do the search, for the first few locations it is faster to do an exhaustive search
-      if(use_kd_tree) then
-         call kdtree2_n_nearest_around_point(real(coord_ISOMAP(index,1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
-         !call kdtree2_n_nearest_around_point(real(coord_ISOMAP_trans(1:d_tree,index)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
-         !write(*,*) 'calculating neighbours (kdtree) for node ',index 
-      else
-         !if(index2.lt.100)then
-         !call exhaustive_srch(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
-         call exhaustive_srch_trans(real(coord_ISOMAP_trans(1:d_tree,index)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
-         !call exhaustive_srch_trans_opt01(real(coord_ISOMAP_trans(1:d_tree,index)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
-         !call exhaustive_srch_opt01(real(coord_ISOMAP_trans(1:d_tree,index)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
-         !else
-         !call exhaustive_srch_omp(real(coord_ISOMAP(index,1:d_tree)),d_tree,nclose, ex_results,ex_results_d,nd+index2)
-         !stop
-         !end if
-         !fill the results array:
-
-         
-         results(:).dis = ex_results_d(1:nclose)
-         results(:).idx = ex_results(1:nclose)
-         ex_sim_array(nd+index2) = index
-         
-         !write(*,*) 'calculating neighbours (exhaustive) for node ',index 
-      end if
-      tree%REARRANGED_IS_USABLE(useablemap(index)) = .true.  !need to tell the tree that this point is now simulated:
-
-
-      !if(level(index).eq.0)then
-      !    cycle
-      !end if
-
-      !do we need to trim out some of the points found?
-      !do i=1,min(nd,ndmax)
-      do i=1,nclosetmp
-         if(results(i).dis>radsqd) then
-            nclose=nclose-1
-         end if
-      end do
-!      write(*,*) index,' ',nclose,' ',results(:).idx
-!      write(*,*) index,' ',nclose,' ',results(:).dis
-
-!levels code
-      maxLevel=-1
-      
-      !do i=1,min(nd,ndmax)
-      do i=1,nclosetmp
-         if(results(i).dis<=radsqd) then
-                 if(level(results(i).idx).gt.maxLevel) then
-                         maxLevel = level(results(i).idx)
-                 end if
-         end if
-      end do
-      if(nclose.eq.0)then
+      do j=1,numThreads
+          if(sim(indexarray(j),1).ne.-999)then
+              level(indexarray(j))=0
+              !go to 50
+          end if
+      end do 
 #ifdef DEBUG    
-              write(*,*) '[FOR)(sgs) ERROR nclose.eq.0'
+      do j=1,numThreads
+      write(*,*)'reach 0 ',indexarray(j),' level=',level(indexarray(j))
+      end do
 #endif
-              level(index)=0
-              ncloseIndex(index)=0
-      else
-              level(index)=maxLevel+1
-              ncloseIndex(index)=nclose
-              !do i=1,min(nd,ndmax)
-              !j=1
-              do i=1,nclosetmp
-                  !if(results(i).dis<=radsqd) then
-                      resultsDisIndex(i,index)=results(i).dis
-                      !resultsDisIndex(j,index)=results(i).dis
-              end do
-              !do i=1,min(nd,ndmax)
-              do i=1,nclosetmp
-                      resultsIdxIndex(i,index)=results(i).idx
-                      !resultsIdxIndex(j,index)=results(i).idx
-                      !j=j+1
-                  !end if
-              end do
-      end if
-      if (maxLevel .gt. numberOfLevels) then
-              numberOfLevels = maxLevel
-      end if
 !levels code end
 
-!      !how many eqns for kriging?
-!      neq=nclose
-!      if(ktype==1) neq=neq+1
-!      !
-!      ! Initialize the main kriging matrix:
-!      a = 0.0
-!      !
-!      ! Fill in the LHS kriging matrix:
-!      !
-!      ...
+!!$omp parallel default(firstprivate) &
+!!$omp shared(ex_sim_array,use_kd_tree,indexarray,reprocessarray,tree,useablemap,level,numberOfLevels,levelStart,levelCount,coord_ISOMAP,coord_ISOMAP_trans,indexSort,dim,nst,c0,it,cc,aa,aainv,cmax,ncloseIndex,resultsDisIndex,resultsIdxIndex,sim,d_tree,skmean,seedd,nreal,ktype,ndmin,xppIndex,lock) &
+!!$omp private(ex_sim_array_local,results,threadId,numThreads,invNumThreads,lev,levIni,levFin,blocknumber,levIniLocal,levFinLocal,countLev,nclose,neq,a,i,j,ind1,ind2,dist,r,vra,rr,k,kadim,ksdim,nrhs,nv,estv,est,ising,s,nk,rand_num,ireal,pp,xpp,ierr,ilock,plock,coord_ISOMAP_vectemp,ex_results_d,largest,largest_d,d,indsearch,skip,nn,results_tmp,tyty)
+!!!$omp num_threads(1)
 !
-! END OF MAIN KRIGING LOOP:
-!
+!      threadId=omp_get_thread_num()+1
+!      numThreads = omp_get_num_threads()
+      !threadId=1
+      !numThreads = 1
+
+      ex_sim_array_local=ex_sim_array
+
+      !write(*,*)'reach 1 threadId=',threadId,' numThreads=',numThreads,' indexarray=',indexarray(threadId)
+#ifdef DEBUG    
+      write(*,*)'reach 1 threadId=',threadId,' numThreads=',numThreads
+#endif
+      !if(level(indexarray(threadId)).eq.0)then
+      if(level(indexarray(threadId)).ne.0)then
+
+          !get the close data in an array 'results'
+          nclose = min(nd,ndmax)
+          nclosetmp = nclose
+     
+          !do the search, for the first few locations it is faster to do an exhaustive search
+
+          if(threadId.gt.1 .and. use_kd_tree) then
+              do j=1,threadId-1
+                  do ireal=1,nreal
+                      sim(indexarray(threadId-j),ireal) = 1.0
+                  end do
+                  tree%REARRANGED_IS_USABLE(useablemap(indexarray(threadId-j))) = .true.  !need to tell the tree that this point is now simulated:
+              end do
+          end if
+
+          if(threadId.gt.1 .and. (.not. use_kd_tree)) then
+              do j=1,threadId-1
+                  do ireal=1,nreal
+                      sim(indexarray(threadId-j),ireal) = 1.0
+                  end do
+                  !ex_sim_array(nd+index2+threadId-j-1) = indexarray(threadId-j) 
+                  ex_sim_array_local(nd+index2+threadId-j-1) = indexarray(threadId-j)
+                  !if(threadId.eq.2)write(*,*)'ex_sim_array_local(',nd+index2+threadId-j-1,')=',ex_sim_array_local(nd+index2+threadId-j-1) 
+              end do
+          end if
 
 
- 50   continue
+          if(use_kd_tree) then
+#ifdef DEBUG    
+             write(*,*)'reach 2 threadId=',threadId
+#endif
+             call kdtree2_n_nearest_around_point_omp(real(coord_ISOMAP(indexarray(threadId),1:d_tree)),d_tree,tree,-1,-1,nclose, results)
+             !call kdtree2_n_nearest_around_point(real(coord_ISOMAP(indexarray(threadId),1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
+          else
+             !call exhaustive_srch_omp(d_tree,nclose,real(coord_ISOMAP(indexarray(threadId),1:d_tree)),nd+index2+threadId-1,ex_sim_array,ex_results,ex_results_d,coord_ISOMAP)
+             !call exhaustive_srch_omp(d_tree,nclose,real(coord_ISOMAP(indexarray(threadId),1:d_tree)),nd+index2+threadId-1,ex_results,ex_results_d,coord_ISOMAP,ex_sim_array)
+             !call exhaustive_srch_omp(real(coord_ISOMAP(indexarray(threadId),1:d_tree)),d_tree,nclose,ex_results,ex_results_d,nd+index2+threadId-1,coord_ISOMAP,ex_sim_array)
+             !call exhaustive_srch(real(coord_ISOMAP(indexarray(threadId),1:d_tree)),d_tree,nclose,ex_results,ex_results_d,nd+index2+threadId-1)
+             !call exhaustive_srch_trans(real(coord_ISOMAP_trans(1:d_tree,indexarray(threadId))),d_tree,nclose,ex_results,ex_results_d,nd+index2+threadId-1)
+             call exhaustive_srch_trans_local(real(coord_ISOMAP_trans(1:d_tree,indexarray(threadId))),d_tree,nclose,ex_results,ex_results_d,nd+index2+threadId-1,nd,threadId,ex_sim_array_local,nloop+nd)
+
+             results(:).dis = ex_results_d(1:nclose)
+             results(:).idx = ex_results(1:nclose)
+             !if(indexarray(threadId).eq.400976)then
+             !    write(*,*)'XYZ-1:',results(:).idx
+             !end if
+             !ex_sim_array_local(nd+index2+threadId-1) = indexarray(threadId) 
+          end if
+#ifdef DEBUG    
+          write(*,*)'reach 2.1 threadId=',threadId
+#endif
+          reprocess=0
+          do i=1,nclosetmp
+              do j=1,threadId
+                  if(results(i).idx.eq.indexarray(j))then
+                      reprocessarray(j)=1
+                      reprocess=1
+                  end if
+              end do
+          end do
+#ifdef DEBUG    
+          write(*,*)'reach 3 threadId=',threadId
+#endif
+          !if(indexarray(threadId).eq.400976)then
+          !   write(*,*)'XYZ-2:',reprocess,'repro:',reprocessarray(:)
+          !end if
+
+          !if(reprocess.eq.0)then
+              if(nclose.eq.0)then
+                  !level(indexarray(threadId))=0
+                  ncloseIndex(indexarray(threadId))=0
+              else
+                  !level(indexarray(threadId))=maxLevel+1
+                  ncloseIndex(indexarray(threadId))=nclose
+                  do i=1,nclosetmp
+                      resultsDisIndex(i,indexarray(threadId))=results(i).dis
+#ifdef DEBUG    
+                      write(*,*) 'CH-PAR=',i,indexarray(threadId),maxLevel,resultsDisIndex(i,indexarray(threadId)),maxLevel 
+#endif
+                  end do
+                  do i=1,nclosetmp
+                      resultsIdxIndex(i,indexarray(threadId))=results(i).idx
+              !if(indexarray(threadId).eq.400976)then
+              !        write(*,*) 'CH-PAR=',i,indexarray(threadId),maxLevel,resultsIdxIndex(i,indexarray(threadId)),maxLevel 
+              !end if
+                  end do
+              end if
+#ifdef DEBUG    
+              write(*,*)'reach 4 threadId=',threadId
+#endif
+
+          !end if
+      end if
+#ifdef DEBUG    
+      write(*,*)'reach 5 threadId=',threadId
+#endif
+
+
+!$omp barrier
+
+!       do j=1,numThreads
+!           indexarray(j) = order(index2+j-1)
+!           do ireal=1,nreal
+!               sim(indexarray(j),ireal) = 1.0
+!           end do
+!           !ex_sim_array(nd+index2+threadId-j-1) = indexarray(threadId-j) 
+!           ex_sim_array_local(nd+index2+j-1) = indexarray(j) 
+!       end do
+
+!!$omp end parallel
+
+!      ! now reprocess each node that was marked, resetting the tree useability map
+!      write(*,*)'reach 6'
+!      write(*,*) numThreads
+!      do j=1,numThreads
+!          write(*,*)index2,indexarray(j) 
+!!          tree%REARRANGED_IS_USABLE(useablemap(indexarray(j))) = .false.  !need to tell the tree that this point hasn't been simulated
+!      end do
+!!stop
+      if(threadId.eq.1)then
+      do j=1,numThreads
+          indexarray(j) = order(index2+j-1)
+      
+          if(level(indexarray(j)).ne.0)then
+
+!          write(*,*)'indexarray ',indexarray(j),reprocessarray(j)
+        
+!          if(indexarray(j).eq.400976)then
+!              write(*,*)'XYZ-1:',resultsIdxIndex(:,indexarray(j))
+!          end if
+
+!          if(level(indexarray(j)).ne.0)then
+              !get the close data in an array 'results
+
+              nclose = min(nd,ndmax)
+              nclosetmp = nclose
+!
+              do i=1,j-1
+                  !do ireal=1,nreal
+                  !    sim(indexarray(j-i),ireal) = 1.0
+                  !end do
+                  ex_sim_array(nd+index2+j-i-1) = indexarray(j-i) 
+              end do
+              maxLevel=-1
+ 
+              !if(level(indexarray(j)).ne.0) then 
+              if(reprocessarray(j).eq.1 )then
+
+!                  nclose = min(nd,ndmax)
+!                  nclosetmp = nclose
+!
+#ifdef DEBUG    
+                  write(*,*) 'Reprocess j=',j,', indexarray=',indexarray(j),'for level=',level(indexarray(j))
+#endif
+!                  if(use_kd_tree) then
+!                      call kdtree2_n_nearest_around_point(real(coord_ISOMAP(indexarray(j),1:d_tree)),d_tree,tp=tree,idxin=-1,correltime=-1,nn=nclose, results=results)
+!                  else
+!                      call exhaustive_srch_trans(real(coord_ISOMAP_trans(1:d_tree,indexarray(j))),d_tree,nclose,ex_results,ex_results_d,nd+index2+j-1)
+!                      results(:).dis = ex_results_d(1:nclose)
+!                      results(:).idx = ex_results(1:nclose)
+!                      ex_sim_array(nd+index2+j-1) = indexarray(j) 
+!                  end if
+!
+!!!                  tree%REARRANGED_IS_USABLE(useablemap(indexarray(j))) = .true.  !need to tell the tree that this point is now simulated:
+!!
+!                  do i=1,nclosetmp
+!                      if(results(i).dis>radsqd) then
+!                          nclose=nclose-1
+!                      end if
+!                  end do
+!
+!                  maxLevel=-1
+!                  do i=1,nclosetmp
+!                      if(results(i).dis<=radsqd) then
+!                          if(level(results(i).idx).gt.maxLevel) then
+!                              maxLevel = level(results(i).idx)
+!                          end if
+!                      end if
+!                  end do
+!                  !if (maxLevel .gt. numberOfLevels) then
+!                  !    numberOfLevels = maxLevel
+!                  !end if
+!
+!                  if(nclose.eq.0)then
+!                      level(indexarray(j))=0
+!                      ncloseIndex(indexarray(j))=0
+!                  else
+!                      write(*,*) nloop,indexarray(j),maxLevel
+!                      !write(*,*) nloop,maxLevel
+!
+!                      level(indexarray(j))=maxLevel+1
+!                      ncloseIndex(indexarray(j))=nclose
+!                      do i=1,nclosetmp
+!                          resultsDisIndex(i,indexarray(j))=results(i).dis
+!                      end do
+!                      do i=1,nclosetmp
+!                          resultsIdxIndex(i,indexarray(j))=results(i).idx
+!                      end do
+!                  end if
+              else
+                  if(nclose.eq.0)then
+                      level(indexarray(j))=0
+                  else
+#ifdef DEBUG    
+                  write(*,*)'Else index2=',index2
+#endif
+!                  tree%REARRANGED_IS_USABLE(useablemap(indexarray(j))) = .true.  !need to tell the tree that this point is now simulated:
+!
+                  do i=1,nclosetmp
+!write(*,*)index2,j,i,indexarray(j),resultsDisIndex(i,indexarray(j)),maxLevel 
+                      if(resultsDisIndex(i,indexarray(j))>radsqd) then
+                          nclose=nclose-1
+                      end if
+                  end do
+
+                  maxLevel=-1
+                  do i=1,nclosetmp
+#ifdef DEBUG    
+                      write(*,*) 'CHECK=',i,indexarray(j),maxLevel,resultsIdxIndex(i,indexarray(j)),resultsDisIndex(i,indexarray(j)),maxLevel 
+#endif
+                      if(resultsDisIndex(i,indexarray(j))<=radsqd) then
+!                              write(*,*)'IF-0:',index2,indexarray(j),resultsIdxIndex(i,indexarray(j)),level(resultsIdxIndex(i,indexarray(j))),maxLevel 
+                          if(level(resultsIdxIndex(i,indexarray(j))).gt.maxLevel) then
+                              maxLevel = level(resultsIdxIndex(i,indexarray(j)))
+!                              write(*,*)'IF-1:',index2,indexarray(j),resultsIdxIndex(i,indexarray(j)),level(resultsIdxIndex(i,indexarray(j))),maxLevel 
+                          end if
+                      end if
+                  end do
+                      !ncloseIndex(indexarray(j))=0
+                  !else
+!#ifdef DEBUG
+!                      write(*,*) nloop,indexarray(j),maxLevel
+!#endif                      
+!if(indexarray(j).eq.1151826)then
+!        write(*,*)'BEGIN Printing:'
+!        write(*,*)level(indexarray(j)), maxLevel
+!        write(*,*)'END Printing:'
+!end if
+                      level(indexarray(j))=maxLevel+1
+                      !ncloseIndex(indexarray(j))=nclose
+                  end if
+
+              end if
+              !end if
+              if (maxLevel .gt. numberOfLevels) then
+                  numberOfLevels = maxLevel
+              end if
+
+              
+          end if
+!
+!!levels code end
+!
+! 50   continue
+!
       do ireal=1,nreal
          pp = grnd()
          call gauinv(pp,xpp,ierr)
          !sim(index,ireal) = xpp * estv + est(ireal)
-         xppIndex(index,ireal) = xpp
+         xppIndex(indexarray(j),ireal) = xpp
          !if(index.eq.debug_id) write(*,*)'sim   ',sim(index,ireal),xpp,estv,est(ireal),pp,ierr
-         sim(index,ireal) = 1.0
+         sim(indexarray(j),ireal) = 1.0
       end do
+
+!
+      end do
+
+      end if
+
+      do i=1,numThreads
+          ex_sim_array(nd+index2+i-1) = indexarray(i) 
+      end do
+#ifdef DEBUG    
+      write(*,*)'reach 6, index2=',index2
+#endif
+
+!$omp barrier
+
       end do
  1    continue
+!$omp end parallel
 
 
     elapsed=secnds(total)
     write(*,'(a,f10.4,a)')  '[FOR](sgs) ',elapsed, 's - time to calculate neighbours and levels for simulation'
 
-
-
-!    do i=1,nloop
-!        write(*,*)'level(',i,')=',level(i)
-!    end do
-!    stop
+    do i=1,nloop
+        write(*,*)'level(',i,')=',level(i)
+    end do
+    
+stop
 !levels code
       sim=-999  !reset the sim array
       do ireal=1,nreal
@@ -2018,4 +2248,99 @@ subroutine makepar
 
     close(lun)
 end subroutine makepar
+
+
+subroutine exhaustive_srch_omp           (dimm,n2srch,vecin,nn,ex_sim_array_var,results,results_d,coord_ISOMAP)
+!subroutine exhaustive_srch_omp           (dimm,n2srch,vecin,nn,results,results_d,coord_ISOMAP,ex_sim_array)
+!subroutine exhaustive_srch_omp           (vecin,dim,nn,results,results_d,n2srch,coord_ISOMAP,ex_sim_array)
+    ! Find the 'nn' vectors nearest to  'vecin',
+    ! returing results in results(:)
+    !n2srch has the number of previously simulated nodes to search in the global array ex_sim_array
+    
+    !real*8                           :: vecin(dim),d,largest_d,results_d(nn),results_temp(nn)
+    integer, intent(in)            :: dimm,n2srch
+    real, intent(in)               :: vecin(dimm)
+    integer, intent(in)         :: nn
+    integer, intent(in)         :: ex_sim_array_var(:)
+    integer, intent(inout)         :: results(nn)
+    real*8, intent(inout)          :: results_d(nn)
+    real*8, intent(in)          :: coord_ISOMAP(:,:)
+
+    integer                        :: idxin, correltime, i,j,k,ind,tyty(1),largest
+    real*8         :: results_temp(nn)
+    real*8         :: d,largest_d 
+    logical        :: skip
+    real           :: vecin_tmp(dimm),ds
+
+
+    write(*,*)'inside exhaustive_srch_omp'
+
+
+   !do an exhaustive search
+   
+   results_d=1.0e21
+   
+   !get the largest dist:
+   largest   = 1
+   largest_d = 1.0e21
+   results_temp=-999
+   
+   do i=1,n2srch
+
+      !get the distance to this node
+      ind = ex_sim_array_var(i)
+      if(ind == -999) exit !(we are done now)   
+!      
+!      !vecin_tmp =coord_ISOMAP(ind,1:dim)-vecin 
+!      !ds = SNRM2(dim,vecin_tmp,1)
+!      !d = dble(ds)
+!      !d = d*d
+!
+!      d= dble( sum( ( coord_ISOMAP(ind,1:dim)-vecin ) **2    ))
+!      
+!      if(d<largest_d) then  !if d==0.0 then we are at a simualtion location and skip
+!      
+!          !do we have this location already?
+!          skip=.false.
+!          do k=1,nn
+!              !if(results_temp(k) ==real(ind)) then 
+!              if(results_temp(k) ==dble(ind)) then 
+!                  skip = .true.
+!                  exit
+!              end if
+!          end do
+!      
+!          if(not(skip) ) then 
+!              results_d(largest) = d
+!              !results_temp(largest) = real(ind)
+!              results_temp(largest) = dble(ind)
+!              
+!              !get the new largest value
+!              tyty = MAXLOC(results_d)
+!              largest=tyty(1)
+!              largest_d=results_d(largest)
+!          end if
+!      end if
+   end do
+!
+!   !call sortem(1,nn,results_d,1,results_temp) 
+!   call sortem2dp(1,nn,results_d,1,results_temp)
+!
+!
+! 
+!   if(minval(results_temp) == -999) then !need to get new nclose
+!      do i=1,nn
+!          if(results_temp(i) == -999) then
+!              nn=i-1
+!              exit
+!          end if
+!      end do
+!   end if
+!
+!
+!   results=int(results_temp)
+
+
+end subroutine exhaustive_srch_omp
+
 

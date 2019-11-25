@@ -7,10 +7,11 @@ module global
     real*8, allocatable, dimension (:,:,:) :: norm_D !template of lengths of offsets
     real*8, allocatable, dimension (:,:) :: data_cov ! store the distance between all points
     real*8, allocatable, dimension (:,:) :: a_JM,d2lanmark,vec,vec1,val,subB2,subB22,vec_test
-    real*8, allocatable, dimension (:,:) :: coord_ISOMAP,temp_coord,coord_LLE,anticline_ex_dij_orij
+    real*8, allocatable, dimension (:,:) :: coord_ISOMAP,coord_ISOMAP_trans,temp_coord,coord_LLE,anticline_ex_dij_orij
     real*8, allocatable, dimension (:,:) :: subB
     real*8, allocatable :: evalues(:), vectors(:,:),x_loc(:),y_loc(:),z_loc(:)
     integer xland,yland,zland,xspace,yspace,zspace,add_paths_data,add_paths_land
+    !integer, allocatable :: ex_results(:),ex_sim_array(:),ex_sim_array_local(:) 
     integer, allocatable :: ex_results(:),ex_sim_array(:)
     real*8, allocatable :: est(:),ex_results_d(:)
     

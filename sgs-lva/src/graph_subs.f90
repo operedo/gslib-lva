@@ -466,9 +466,7 @@ add_paths_data=0
         
     old_max_seg=max_seg !have to use the straightline dist, so set the max_seg=0 for john's min dist solution
     max_seg=0
-    write(*,*) ; write(*,*)  ; write(*,*) 
-    write(*,*) 'calcualting the distances between nodes for the graph theory implementation'
-    write(*,*) ; write(*,*)  ; write(*,*) 
+    write(*,*) '[FOR](set_graph_onlymem) Calculating the distances between nodes for the graph theory implementation'
     
     !lookup way for the distances
     !need a normalizing constant for each offset, depending on number of refinements.
@@ -481,9 +479,9 @@ add_paths_data=0
     allocate(norm_D(-i:i,-i:i,-ii:ii),stat = test)
     if(test /= 0 ) then
         use_template=0
-        write(*,*) '!!!!WARRNING!!!'
-        write(*,*) 'could not allocate an array big enought for distance offsets'
-        write(*,*) 'this will slow down the calcualtion of the STRAIGHTLINE distances in the graph'
+        write(*,*) '[FOR](set_graph_onlymem) !!!!WARRNING!!!'
+        write(*,*) '[FOR](set_graph_onlymem) could not allocate an array big enought for distance offsets'
+        write(*,*) '[FOR](set_graph_onlymem) this will slow down the calcualtion of the STRAIGHTLINE distances in the graph'
         if(allocated(template_D)) deallocate(template_D)
         if(allocated(norm_D)) deallocate(norm_D)
     end if
@@ -491,9 +489,9 @@ add_paths_data=0
     allocate(template_D(-i:i,-i:i,-ii:ii,nx2,ny2,nz2),stat = test)
     if(test /= 0 ) then
         use_template=0
-        write(*,*) '!!!!WARRNING!!!'
-        write(*,*) 'could not allocate an array big enought for distance offsets'
-        write(*,*) 'this will slow down the calcualtion of the STRAIGHTLINE distances in the graph'
+        write(*,*) '[FOR](set_graph_onlymem) !!!!WARRNING!!!'
+        write(*,*) '[FOR](set_graph_onlymem) could not allocate an array big enought for distance offsets'
+        write(*,*) '[FOR](set_graph_onlymem) this will slow down the calcualtion of the STRAIGHTLINE distances in the graph'
         if(allocated(template_D)) deallocate(template_D)
         if(allocated(norm_D)) deallocate(norm_D)
     end if
@@ -533,7 +531,7 @@ add_paths_data=0
         end do
     end if !if using the template to cal distances
     sum_time = secnds(start_time)
-Write(*,*) 'calculating distances with template ',sum_time
+    write(*,*) '[FOR](set_graph_onlymem) Calculating distances with template ',sum_time
     
 !now need a template if the offset is is more than one
 !some of the links in the offset>1 are redundant
@@ -562,7 +560,7 @@ end do
 redund_temp(0,0,0)=1
 
 sum_time = secnds(start_time)
-Write(*,*) 'calculating redundancies in template ',sum_time
+write(*,*) '[FOR](set_graph_onlymem) Calculating redundancies in template ',sum_time
 
 
 start_time=secnds(0.0)
@@ -588,7 +586,7 @@ start_time=secnds(0.0)
     
     EDGES=EDGES
 sum_time = secnds(start_time)
-Write(*,*) 'counting edges ',sum_time
+Write(*,*) '[FOR](set_graph_onlymem) counting edges ',sum_time
 
 
     NODES_LENGTH=NODES
@@ -596,7 +594,7 @@ Write(*,*) 'counting edges ',sum_time
     
     allocate(KF(nx2*ny2*nz2+1+ndata),stat = test)
         if(test.ne.0)then
-              write(*,'(a,I10,a)') 'ERROR: Allocation failed your graph is too large and requires ',EDGES,' edges'
+              write(*,'(a,I10,a)') '[FOR](set_graph_onlymem) ERROR: Allocation failed your graph is too large and requires ',EDGES,' edges'
               stop
         end if
     
@@ -745,12 +743,10 @@ start_time=secnds(0.0)
     cnt=0
     
 sum_time = secnds(start_time)
-Write(*,*) 'computing graph edges and distances ',sum_time,NODES_LENGTH,GRID_OUT_LENGTH
+write(*,*) '[FOR](set_graph_onlymem) computing graph edges and distances ',sum_time,NODES_LENGTH,GRID_OUT_LENGTH
       
 
-    write(*,*) ; write(*,*)  ; write(*,*) 
-    write(*,'(a,I10,a,I10,a)') 'DONE calcualting the distances between ',NODES, ' nodes, with ', EDGES,' edges'
-    write(*,*) ; write(*,*)  ; write(*,*) 
+    write(*,'(a,I10,a,I10,a)') '[FOR](set_graph_onlymem) DONE calculating the distances between ',NODES, ' nodes, with ', EDGES,' edges'
     
     max_seg=old_max_seg !reset the max segment to the user defined value
     close(ldbg2)
